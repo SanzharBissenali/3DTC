@@ -1,0 +1,80 @@
+{"time":"2026-06-15T12:16:19.14389-04:00","level":"INFO","msg":"wandb-core"}
+{"time":"2026-06-15T12:16:19.146022-04:00","level":"INFO","msg":"stream: starting","core version":"0.27.2"}
+{"time":"2026-06-15T12:16:19.438793-04:00","level":"INFO","msg":"stream: created new stream","id":"pyp5qq09"}
+{"time":"2026-06-15T12:16:19.438912-04:00","level":"INFO","msg":"handler: started"}
+{"time":"2026-06-15T12:16:19.4392-04:00","level":"INFO","msg":"stream: started"}
+{"time":"2026-06-15T12:16:19.439231-04:00","level":"INFO","msg":"writer: started","stream_id":"pyp5qq09"}
+{"time":"2026-06-15T12:16:19.439263-04:00","level":"INFO","msg":"sender: started"}
+{"time":"2026-06-15T12:16:25.241803-04:00","level":"INFO","msg":"filestream: sending request","total_files":0,"uploaded_len":1}
+{"time":"2026-06-15T12:16:25.535797-04:00","level":"INFO","msg":"filestream: request sent","status":"200 OK"}
+{"time":"2026-06-15T12:16:40.242435-04:00","level":"INFO","msg":"filestream: sending request","total_files":1,"events_offset":0,"events_lines":2,"uploaded_len":1}
+{"time":"2026-06-15T12:16:40.439233-04:00","level":"INFO","msg":"filestream: request sent","status":"200 OK"}
+{"time":"2026-06-15T12:16:55.246633-04:00","level":"INFO","msg":"filestream: sending request","total_files":1,"events_offset":2,"events_lines":2}
+{"time":"2026-06-15T12:16:55.432593-04:00","level":"INFO","msg":"filestream: request sent","status":"200 OK"}
+{"time":"2026-06-15T12:17:10.263411-04:00","level":"INFO","msg":"filestream: sending request","total_files":1,"events_offset":4,"events_lines":2}
+{"time":"2026-06-15T12:17:11.549911-04:00","level":"INFO","msg":"filestream: request sent","status":"200 OK"}
+{"time":"2026-06-15T12:17:25.242901-04:00","level":"INFO","msg":"filestream: sending request","total_files":1,"events_offset":6,"events_lines":2}
+{"time":"2026-06-15T12:17:25.45861-04:00","level":"INFO","msg":"filestream: request sent","status":"200 OK"}
+{"time":"2026-06-15T12:17:40.256815-04:00","level":"INFO","msg":"filestream: sending request","total_files":1,"events_offset":8,"events_lines":2}
+{"time":"2026-06-15T12:17:40.511226-04:00","level":"INFO","msg":"filestream: request sent","status":"200 OK"}
+{"time":"2026-06-15T12:17:55.243457-04:00","level":"INFO","msg":"filestream: sending request","total_files":1,"events_offset":10,"events_lines":2}
+{"time":"2026-06-15T12:17:55.482249-04:00","level":"INFO","msg":"filestream: request sent","status":"200 OK"}
+{"time":"2026-06-15T12:18:10.243218-04:00","level":"INFO","msg":"filestream: sending request","total_files":1,"events_offset":12,"events_lines":2}
+{"time":"2026-06-15T12:18:10.49441-04:00","level":"INFO","msg":"filestream: request sent","status":"200 OK"}
+{"time":"2026-06-15T12:18:25.2439-04:00","level":"INFO","msg":"filestream: sending request","total_files":1,"events_offset":14,"events_lines":2}
+{"time":"2026-06-15T12:18:25.416542-04:00","level":"INFO","msg":"filestream: request sent","status":"200 OK"}
+{"time":"2026-06-15T12:18:40.243909-04:00","level":"INFO","msg":"filestream: sending request","total_files":2,"events_offset":16,"events_lines":2,"console_offset":0,"console_lines":1}
+{"time":"2026-06-15T12:18:40.482682-04:00","level":"INFO","msg":"filestream: request sent","status":"200 OK"}
+{"time":"2026-06-15T12:18:55.243701-04:00","level":"INFO","msg":"filestream: sending request","total_files":1,"events_offset":18,"events_lines":2}
+{"time":"2026-06-15T12:18:55.488479-04:00","level":"INFO","msg":"filestream: request sent","status":"200 OK"}
+{"time":"2026-06-15T12:19:10.24399-04:00","level":"INFO","msg":"filestream: sending request","total_files":1,"events_offset":20,"events_lines":2}
+{"time":"2026-06-15T12:19:10.502998-04:00","level":"INFO","msg":"filestream: request sent","status":"200 OK"}
+{"time":"2026-06-15T12:19:25.24492-04:00","level":"INFO","msg":"filestream: sending request","total_files":1,"events_offset":22,"events_lines":2}
+{"time":"2026-06-15T12:19:25.737106-04:00","level":"INFO","msg":"filestream: request sent","status":"200 OK"}
+{"time":"2026-06-15T12:19:40.244074-04:00","level":"INFO","msg":"filestream: sending request","total_files":1,"events_offset":24,"events_lines":2}
+{"time":"2026-06-15T12:19:40.534427-04:00","level":"INFO","msg":"filestream: request sent","status":"200 OK"}
+{"time":"2026-06-15T12:19:55.244598-04:00","level":"INFO","msg":"filestream: sending request","total_files":1,"events_offset":26,"events_lines":2}
+{"time":"2026-06-15T12:19:55.775289-04:00","level":"INFO","msg":"filestream: request sent","status":"200 OK"}
+{"time":"2026-06-15T12:20:10.246436-04:00","level":"INFO","msg":"filestream: sending request","total_files":4,"history_offset":0,"history_lines":1,"events_offset":28,"events_lines":2,"console_offset":1,"console_lines":1}
+{"time":"2026-06-15T12:20:10.482433-04:00","level":"INFO","msg":"filestream: request sent","status":"200 OK"}
+{"time":"2026-06-15T12:20:25.244848-04:00","level":"INFO","msg":"filestream: sending request","total_files":1,"events_offset":30,"events_lines":2}
+{"time":"2026-06-15T12:20:25.415245-04:00","level":"INFO","msg":"filestream: request sent","status":"200 OK"}
+{"time":"2026-06-15T12:20:40.245139-04:00","level":"INFO","msg":"filestream: sending request","total_files":1,"events_offset":32,"events_lines":2}
+{"time":"2026-06-15T12:20:40.470514-04:00","level":"INFO","msg":"filestream: request sent","status":"200 OK"}
+{"time":"2026-06-15T12:20:55.244958-04:00","level":"INFO","msg":"filestream: sending request","total_files":1,"events_offset":34,"events_lines":2}
+{"time":"2026-06-15T12:20:55.454477-04:00","level":"INFO","msg":"filestream: request sent","status":"200 OK"}
+{"time":"2026-06-15T12:21:10.245179-04:00","level":"INFO","msg":"filestream: sending request","total_files":1,"events_offset":36,"events_lines":2}
+{"time":"2026-06-15T12:21:10.498941-04:00","level":"INFO","msg":"filestream: request sent","status":"200 OK"}
+{"time":"2026-06-15T12:21:25.245384-04:00","level":"INFO","msg":"filestream: sending request","total_files":4,"history_offset":1,"history_lines":1,"events_offset":38,"events_lines":2,"console_offset":2,"console_lines":1}
+{"time":"2026-06-15T12:21:25.420216-04:00","level":"INFO","msg":"filestream: request sent","status":"200 OK"}
+{"time":"2026-06-15T12:21:40.246519-04:00","level":"INFO","msg":"filestream: sending request","total_files":1,"events_offset":40,"events_lines":2}
+{"time":"2026-06-15T12:21:40.480309-04:00","level":"INFO","msg":"filestream: request sent","status":"200 OK"}
+{"time":"2026-06-15T12:21:55.25026-04:00","level":"INFO","msg":"filestream: sending request","total_files":1,"events_offset":42,"events_lines":2}
+{"time":"2026-06-15T12:21:55.436335-04:00","level":"INFO","msg":"filestream: request sent","status":"200 OK"}
+{"time":"2026-06-15T12:22:10.245845-04:00","level":"INFO","msg":"filestream: sending request","total_files":1,"events_offset":44,"events_lines":2}
+{"time":"2026-06-15T12:22:10.45634-04:00","level":"INFO","msg":"filestream: request sent","status":"200 OK"}
+{"time":"2026-06-15T12:22:25.25391-04:00","level":"INFO","msg":"filestream: sending request","total_files":1,"events_offset":46,"events_lines":2}
+{"time":"2026-06-15T12:22:25.628308-04:00","level":"INFO","msg":"filestream: request sent","status":"200 OK"}
+{"time":"2026-06-15T12:22:40.246275-04:00","level":"INFO","msg":"filestream: sending request","total_files":4,"history_offset":2,"history_lines":1,"events_offset":48,"events_lines":2,"console_offset":3,"console_lines":1}
+{"time":"2026-06-15T12:22:40.469439-04:00","level":"INFO","msg":"filestream: request sent","status":"200 OK"}
+{"time":"2026-06-15T12:22:55.251289-04:00","level":"INFO","msg":"filestream: sending request","total_files":1,"events_offset":50,"events_lines":2}
+{"time":"2026-06-15T12:24:25.921113-04:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/files/models-california-institute-of-technology-caltech/approx-sym-3D-TC/pyp5qq09/file_stream\": read tcp [2607:fb91:dcf:3a0:cdde:3fbd:6e42:c242]:65245->[2607:7700:0:b:0:2:2208:fa65]:443: read: no route to host"}
+{"time":"2026-06-15T12:24:28.245404-04:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/files/models-california-institute-of-technology-caltech/approx-sym-3D-TC/pyp5qq09/file_stream\": dial tcp: lookup api.wandb.ai: no such host"}
+{"time":"2026-06-15T12:24:32.800732-04:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/files/models-california-institute-of-technology-caltech/approx-sym-3D-TC/pyp5qq09/file_stream\": dial tcp: lookup api.wandb.ai: no such host"}
+{"time":"2026-06-15T12:24:41.416636-04:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/files/models-california-institute-of-technology-caltech/approx-sym-3D-TC/pyp5qq09/file_stream\": dial tcp: lookup api.wandb.ai: no such host"}
+{"time":"2026-06-15T12:24:58.303655-04:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/files/models-california-institute-of-technology-caltech/approx-sym-3D-TC/pyp5qq09/file_stream\": dial tcp: lookup api.wandb.ai: no such host"}
+{"time":"2026-06-15T12:25:34.034979-04:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/files/models-california-institute-of-technology-caltech/approx-sym-3D-TC/pyp5qq09/file_stream\": dial tcp: lookup api.wandb.ai: no such host"}
+{"time":"2026-06-15T12:26:34.043734-04:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/files/models-california-institute-of-technology-caltech/approx-sym-3D-TC/pyp5qq09/file_stream\": dial tcp: lookup api.wandb.ai: no such host"}
+{"time":"2026-06-15T12:27:34.04879-04:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/files/models-california-institute-of-technology-caltech/approx-sym-3D-TC/pyp5qq09/file_stream\": dial tcp: lookup api.wandb.ai: no such host"}
+{"time":"2026-06-15T12:28:34.069774-04:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/files/models-california-institute-of-technology-caltech/approx-sym-3D-TC/pyp5qq09/file_stream\": dial tcp: lookup api.wandb.ai: no such host"}
+{"time":"2026-06-15T12:29:34.07713-04:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/files/models-california-institute-of-technology-caltech/approx-sym-3D-TC/pyp5qq09/file_stream\": dial tcp: lookup api.wandb.ai: no such host"}
+{"time":"2026-06-15T12:30:34.081323-04:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/files/models-california-institute-of-technology-caltech/approx-sym-3D-TC/pyp5qq09/file_stream\": dial tcp: lookup api.wandb.ai: no such host"}
+{"time":"2026-06-15T12:46:32.099871-04:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/files/models-california-institute-of-technology-caltech/approx-sym-3D-TC/pyp5qq09/file_stream\": dial tcp: lookup api.wandb.ai: no such host"}
+{"time":"2026-06-15T12:47:32.108042-04:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/files/models-california-institute-of-technology-caltech/approx-sym-3D-TC/pyp5qq09/file_stream\": dial tcp: lookup api.wandb.ai: no such host"}
+{"time":"2026-06-15T13:03:30.744325-04:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/files/models-california-institute-of-technology-caltech/approx-sym-3D-TC/pyp5qq09/file_stream\": dial tcp: lookup api.wandb.ai: no such host"}
+{"time":"2026-06-15T13:04:30.751878-04:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/files/models-california-institute-of-technology-caltech/approx-sym-3D-TC/pyp5qq09/file_stream\": dial tcp: lookup api.wandb.ai: no such host"}
+{"time":"2026-06-15T13:05:30.758005-04:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/files/models-california-institute-of-technology-caltech/approx-sym-3D-TC/pyp5qq09/file_stream\": dial tcp: lookup api.wandb.ai: no such host"}
+{"time":"2026-06-15T13:06:30.766115-04:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/files/models-california-institute-of-technology-caltech/approx-sym-3D-TC/pyp5qq09/file_stream\": dial tcp: lookup api.wandb.ai: no such host"}
+{"time":"2026-06-15T13:07:30.774914-04:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/files/models-california-institute-of-technology-caltech/approx-sym-3D-TC/pyp5qq09/file_stream\": dial tcp: lookup api.wandb.ai: no such host"}
+{"time":"2026-06-15T13:08:30.780562-04:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/files/models-california-institute-of-technology-caltech/approx-sym-3D-TC/pyp5qq09/file_stream\": dial tcp: lookup api.wandb.ai: no such host"}
+{"time":"2026-06-15T13:08:55.79517-04:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}

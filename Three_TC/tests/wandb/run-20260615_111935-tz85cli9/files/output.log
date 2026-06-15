@@ -1,0 +1,58 @@
+step   0: E = -9.9706
+step   1: E = -12.2046
+step   2: E = -14.3302
+step   3: E = -16.9593
+step   4: E = -19.4840
+step   5: E = -22.4288
+step   6: E = -25.7773
+step   7: E = -28.7647
+step   8: E = -30.1923
+step   9: E = -31.3984
+step  10: E = -31.5576
+step  11: E = -31.7793
+step  12: E = -31.9570
+step  13: E = -31.9677
+step  14: E = -31.9942
+step  15: E = -31.9883
+step  16: E = -31.9962
+Traceback (most recent call last):
+  File "/Users/sanzhar123/Desktop/Approximate-Symmetries-TC-main/Three_TC/tests/test_full_CNN.py", line 156, in <module>
+    E = vs.expect(Ham)
+  File "/Users/sanzhar123/Desktop/Approximate-Symmetries-TC-main/.venv/lib/python3.13/site-packages/netket/utils/timing.py", line 276, in timed_function
+    result = fun(*args, **kwargs)
+  File "/Users/sanzhar123/Desktop/Approximate-Symmetries-TC-main/.venv/lib/python3.13/site-packages/netket/vqs/mc/mc_state/state.py", line 675, in expect
+    return expect(self, O, self.chunk_size)
+  File "/Users/sanzhar123/Desktop/Approximate-Symmetries-TC-main/.venv/lib/python3.13/site-packages/plum/_function.py", line 395, in __call__
+    return _convert(method(*args, **kw), return_type)
+                    ~~~~~~^^^^^^^^^^^^^
+  File "/Users/sanzhar123/Desktop/Approximate-Symmetries-TC-main/.venv/lib/python3.13/site-packages/netket/vqs/mc/mc_state/expect.py", line 108, in expect
+    σ, args = get_local_kernel_arguments(vstate, Ô)
+              ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/Users/sanzhar123/Desktop/Approximate-Symmetries-TC-main/.venv/lib/python3.13/site-packages/plum/_function.py", line 395, in __call__
+    return _convert(method(*args, **kw), return_type)
+                    ~~~~~~^^^^^^^^^^^^^
+  File "/Users/sanzhar123/Desktop/Approximate-Symmetries-TC-main/.venv/lib/python3.13/site-packages/netket/vqs/mc/mc_state/expect.py", line 62, in get_local_kernel_arguments
+    σp, mels = Ô.get_conn_padded(σ)
+               ~~~~~~~~~~~~~~~~~~^^^
+  File "/Users/sanzhar123/Desktop/Approximate-Symmetries-TC-main/.venv/lib/python3.13/site-packages/netket/operator/_discrete_operator.py", line 77, in get_conn_padded
+    x_primes, mels = self.get_conn_flattened(
+                     ~~~~~~~~~~~~~~~~~~~~~~~^
+        x.reshape(-1, x.shape[-1]), sections, pad=True
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Users/sanzhar123/Desktop/Approximate-Symmetries-TC-main/.venv/lib/python3.13/site-packages/netket/operator/_pauli_strings/numba.py", line 248, in get_conn_flattened
+    x_ids = concrete_or_error(
+        np.asarray,
+    ...<2 lines>...
+        self,
+    )
+  File "/Users/sanzhar123/Desktop/Approximate-Symmetries-TC-main/.venv/lib/python3.13/site-packages/netket/errors.py", line 1123, in concrete_or_error
+    return concrete_or_error(
+        force,
+    ...<2 lines>...
+      """,
+    )
+  File "/Users/sanzhar123/Desktop/Approximate-Symmetries-TC-main/.venv/lib/python3.13/site-packages/jax/_src/core.py", line 1592, in concrete_or_error
+    return force(val)
+KeyboardInterrupt

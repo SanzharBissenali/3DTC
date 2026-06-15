@@ -1,0 +1,13 @@
+2026-06-10 17:53:20,338 INFO    MainThread:72899 [wandb_setup.py:_flush():81] Current SDK version is 0.27.2
+2026-06-10 17:53:20,338 INFO    MainThread:72899 [wandb_setup.py:_flush():81] Configure stats pid to 72899
+2026-06-10 17:53:20,338 INFO    MainThread:72899 [wandb_setup.py:_flush():81] Loading settings from environment variables
+2026-06-10 17:53:20,338 INFO    MainThread:72899 [wandb_init.py:setup_run_log_directory():723] Logging user logs to /Users/sanzhar123/Desktop/Approximate-Symmetries-TC-main/Three_TC/tests/wandb/run-20260610_175320-0e87hd6b/logs/debug.log
+2026-06-10 17:53:20,338 INFO    MainThread:72899 [wandb_init.py:setup_run_log_directory():724] Logging internal logs to /Users/sanzhar123/Desktop/Approximate-Symmetries-TC-main/Three_TC/tests/wandb/run-20260610_175320-0e87hd6b/logs/debug-internal.log
+2026-06-10 17:53:20,338 INFO    MainThread:72899 [wandb_init.py:init():766] calling init triggers
+2026-06-10 17:53:20,338 INFO    MainThread:72899 [wandb_init.py:init():771] wandb.init called with sweep_config: {}
+config: {'Lx': 2, 'Ly': 2, 'Lz': 2, 'bc': 'PBC', 'N': 24, 'N_plaq': 24, 'N_vertices': 8, 'hx': 0.0, 'hy': 0.0, 'hz': 0.0, 'J': 1.0, 'dim': 3, 'dtype': 'float64', 'exact_E0': -32.0, 'model_type': 'CNN_inv_only', 'channels_inv': [3, 8, 1], 'channels_noninv': None, 'kernel_size': 3, 'hidden_dim': 8, 'activation': 'elu', 'n_iter': 100, 'dt': 0.02, 'diag_shift': 0.001, 'optimizer': 'SGD', 'preconditioner': 'SR', 'seed': 0, 'sampler_type': 'local', 'n_samples': 1024, 'n_chains': 16, 'n_sweeps': 12, 'n_discard': 8, '_wandb': {}}
+2026-06-10 17:53:20,338 INFO    MainThread:72899 [wandb_init.py:init():814] starting backend
+2026-06-10 17:53:20,338 INFO    MainThread:72899 [wandb_init.py:init():829] sending inform_init request
+2026-06-10 17:53:20,744 INFO    MainThread:72899 [wandb_init.py:init():834] backend started and connected
+2026-06-10 17:53:20,748 INFO    MainThread:72899 [wandb_init.py:init():904] updated telemetry
+2026-06-10 17:53:20,749 INFO    MainThread:72899 [wandb_init.py:init():927] communicating run to backend with 90.0 second timeout

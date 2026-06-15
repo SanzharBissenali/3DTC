@@ -1,0 +1,122 @@
+_wandb:
+    value:
+        cli_version: 0.27.2
+        e:
+            tkabe39w3ccot4ygdr8az0m8tydf5o3q:
+                apple:
+                    ecpuCores: 4
+                    gpuCores: 8
+                    macModel: MacBookPro17,1
+                    memoryGb: 8
+                    name: Apple M1
+                    pcpuCores: 4
+                    ramTotalBytes: "8589934592"
+                    swapTotalBytes: "9663676416"
+                codePath: test_symm_CNN.py
+                codePathLocal: test_symm_CNN.py
+                cpu_count: 8
+                cpu_count_logical: 8
+                disk:
+                    /:
+                        total: "245107195904"
+                        used: "241171501056"
+                email: sbissena@caltech.edu
+                executable: /Users/sanzhar123/Desktop/Approximate-Symmetries-TC-main/.venv/bin/python
+                host: MacBook-Pro-Sanzhar-10.local
+                memory:
+                    total: "8589934592"
+                os: macOS-15.6-arm64-arm-64bit-Mach-O
+                program: /Users/sanzhar123/Desktop/Approximate-Symmetries-TC-main/Three_TC/tests/test_symm_CNN.py
+                python: CPython 3.13.5
+                root: /Users/sanzhar123/Desktop/Approximate-Symmetries-TC-main/Three_TC/tests
+                startedAt: "2026-06-11T00:54:39.216513Z"
+                writerId: tkabe39w3ccot4ygdr8az0m8tydf5o3q
+        m: []
+        python_version: 3.13.5
+        t:
+            "1":
+                - 12
+                - 45
+                - 105
+            "2":
+                - 12
+                - 45
+                - 105
+            "3":
+                - 2
+                - 13
+                - 15
+                - 16
+                - 61
+                - 62
+            "4": 3.13.5
+            "5": 0.27.2
+            "10":
+                - 20
+            "12": 0.27.2
+            "13": darwin-arm64
+J:
+    value: 1
+Lx:
+    value: 2
+Ly:
+    value: 2
+Lz:
+    value: 2
+"N":
+    value: 24
+N_plaq:
+    value: 24
+N_vertices:
+    value: 8
+activation:
+    value: elu
+bc:
+    value: PBC
+channels_inv:
+    value:
+        - 3
+        - 8
+        - 1
+channels_noninv:
+    value: null
+diag_shift:
+    value: 0.001
+dim:
+    value: 3
+dt:
+    value: 0.02
+dtype:
+    value: float64
+exact_E0:
+    value: -32
+hidden_dim:
+    value: 8
+hx:
+    value: 0
+hy:
+    value: 0
+hz:
+    value: 0
+kernel_size:
+    value: 3
+model_type:
+    value: CNN_inv_only
+n_chains:
+    value: 16
+n_discard:
+    value: 8
+n_iter:
+    value: 100
+n_samples:
+    value: 1024
+n_sweeps:
+    value: 12
+optimizer:
+    value: SGD
+preconditioner:
+    value: SR
+sampler_type:
+    value: local
+seed:
+    value: 0

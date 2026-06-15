@@ -1,0 +1,34 @@
+{
+  "os": "macOS-15.6-arm64-arm-64bit-Mach-O",
+  "python": "CPython 3.13.5",
+  "startedAt": "2026-06-15T15:54:05.721001Z",
+  "program": "/Users/sanzhar123/Desktop/Approximate-Symmetries-TC-main/Three_TC/tests/test_symm_CNN.py",
+  "codePath": "test_symm_CNN.py",
+  "codePathLocal": "test_symm_CNN.py",
+  "email": "sbissena@caltech.edu",
+  "root": "/Users/sanzhar123/Desktop/Approximate-Symmetries-TC-main/Three_TC/tests",
+  "host": "MacBook-Pro-Sanzhar-10.local",
+  "executable": "/Users/sanzhar123/Desktop/Approximate-Symmetries-TC-main/.venv/bin/python",
+  "cpu_count": 8,
+  "cpu_count_logical": 8,
+  "disk": {
+    "/": {
+      "total": "245107195904",
+      "used": "238705954816"
+    }
+  },
+  "memory": {
+    "total": "8589934592"
+  },
+  "apple": {
+    "name": "Apple M1",
+    "ecpuCores": 4,
+    "pcpuCores": 4,
+    "gpuCores": 8,
+    "memoryGb": 8,
+    "swapTotalBytes": "7516192768",
+    "ramTotalBytes": "8589934592",
+    "macModel": "MacBookPro17,1"
+  },
+  "writerId": "8zlxxebebr3vhsl1u8zgf6ktvzm0duhm"
+}
