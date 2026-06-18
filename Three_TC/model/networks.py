@@ -39,10 +39,8 @@ import numpy as np
 import jax.numpy as jnp
 import flax.linen as nn
 
-
-# =============================================================================
 # Geometry helper
-# =============================================================================
+
 
 def compute_edges_3D(geo) -> np.ndarray:
     """
@@ -67,10 +65,7 @@ def compute_edges_3D(geo) -> np.ndarray:
                     edges_3D[c, ix, iy, iz] = geo._mapping3Dto1D(coord)
     return edges_3D
 
-
-# =============================================================================
 # Initialiser and activation for the non-invariant block
-# =============================================================================
 
 def identity_initializer_3D(kernel_size: int):
     """
@@ -105,9 +100,7 @@ def _normalised_sigmoid(x):
     return (nn.sigmoid(x) - 0.5) * (2 + 2 * jnp.e) / (jnp.e - 1)
 
 
-# =============================================================================
 # Building blocks
-# =============================================================================
 
 class CNN_invariant_3D(nn.Module):
     """
@@ -161,9 +154,7 @@ class CNN_noninvariant_3D(nn.Module):
         return jnp.moveaxis(x, -1, -4)                    # back to channels-first
 
 
-# =============================================================================
 # Composed models
-# =============================================================================
 
 class ToricCNN(nn.Module):
     """
