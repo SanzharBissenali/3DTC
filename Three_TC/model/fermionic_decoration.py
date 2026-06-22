@@ -28,6 +28,15 @@ def _idx(geom, coord) -> int:
     return int(geom._coord_to_idx[key])
 
 
+def _mask(qubits) -> int:
+    """Bitmask over a list of qubit indices (skips -1 padding)."""
+    m = 0
+    for q in qubits:
+        if q != -1:
+            m |= 1 << int(q)
+    return m
+
+
 def fermionic_plaquettes(geom, J: float = 1.0):
     """Decorated plaquette stabilizers as (z_edges, x_edges, coef) triples.
 
@@ -55,15 +64,8 @@ def verify_xz_commutation(stabs, vertex_all) -> dict:
 
     Returns {"ok": bool, "violations": list, "n_stabilizers": int}.
     """
-    def mask(qs):
-        m = 0
-        for q in qs:
-            if q != -1:
-                m |= 1 << int(q)
-        return m
-
-    entries = [(mask(z), mask(x)) for z, x, _ in stabs]
-    entries += [(0, mask(v)) for v in vertex_all]
+    entries = [(_mask(z), _mask(x)) for z, x, _ in stabs]
+    entries += [(0, _mask(v)) for v in vertex_all]
 
     viol = []
     n = len(entries)
@@ -74,3 +76,59 @@ def verify_xz_commutation(stabs, vertex_all) -> dict:
             if (bin(z1 & x2).count("1") + bin(z2 & x1).count("1")) & 1:
                 viol.append((i, j))
     return {"ok": not viol, "violations": viol, "n_stabilizers": n}
+
+
+# ---------------------------------------------------------------------------
+# Dressed Wilson loop / Fredenhagen-Marcu string
+# ---------------------------------------------------------------------------
+def _gf2_solve(rows, targets, ncols) -> int:
+    """Best-effort GF(2) solve of  popcount(rows[i] & s) == targets[i].
+
+    `rows` are column-bitmasks (one per equation).  Returns a particular
+    solution `s` (a bitmask) of the *consistent* subsystem; equations that
+    can't be satisfied are left as a residual (see `dressed_string`).
+    """
+    R = len(rows)
+    aug = [rows[i] | (int(targets[i]) << ncols) for i in range(R)]
+    pivot_of = {}          # pivot column -> reduced-row index
+    r = 0
+    for col in range(ncols):
+        sel = next((k for k in range(r, R) if (aug[k] >> col) & 1), None)
+        if sel is None:
+            continue
+        aug[r], aug[sel] = aug[sel], aug[r]
+        for k in range(R):
+            if k != r and (aug[k] >> col) & 1:
+                aug[k] ^= aug[r]
+        pivot_of[col] = r
+        r += 1
+    s = 0
+    for col, row in pivot_of.items():
+        if (aug[row] >> ncols) & 1:   # free vars = 0, pivot var = its target bit
+            s |= 1 << col
+    return s
+
+
+def dressed_string(geom, stabs, z_edges):
+    """Dress a sigma^z string so it commutes with every decorated plaquette.
+
+    Solves for a sigma^x support `s` with  parity(|s ∩ boundary_p|) ==
+    parity(|z_edges ∩ decoration_p|)  for each plaquette p, so that
+    Z(z_edges)·X(s) commutes with all tilde B_p (vertex stars are automatic:
+    sigma^x commutes with the all-sigma^x stars).
+
+    Returns (z_edges, x_edges, flux_plaqs):
+      - closed loop  -> flux_plaqs == []  (a conserved Wilson loop),
+      - open string  -> flux_plaqs lists the endpoint plaquettes it still
+        anticommutes with (the unavoidable flux of the charge+flux fermion).
+    """
+    zmask = _mask(z_edges)
+    rows = [_mask(zb) for zb, xb, _ in stabs]
+    targets = [bin(zmask & _mask(xb)).count("1") & 1 for zb, xb, _ in stabs]
+    s = _gf2_solve(rows, targets, geom.N)
+    if zmask & s:
+        raise ValueError("dressing overlaps the sigma^z line (would give sigma^y)")
+    x_edges = [i for i in range(geom.N) if (s >> i) & 1]
+    flux_plaqs = [p for p, (zb, xb, _) in enumerate(stabs)
+                  if (bin(zmask & _mask(xb)).count("1") + bin(s & _mask(zb)).count("1")) & 1]
+    return z_edges, x_edges, flux_plaqs

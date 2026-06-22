@@ -140,13 +140,64 @@ H, basis = hamiltonian_linop(geom, hx=0.3, hz=0.3, xz_stabs=stabs)
 # eigsh exactly as in bosonic — the matrix-free pipeline doesn't change.
 ```
 
+## Dressed Wilson loop & fermionic order parameter
+
+The bare $\sigma^z$ Wilson string is **not conserved** in the fermionic model: a
+$\sigma^z$ line that runs through a decorated edge anticommutes with that
+plaquette's $\sigma^x$ (we measured a straight wrapping line anticommuting with 4
+of the $\tilde B_p$). So it can't serve as an order parameter — acting with it on
+the ground state sprays plaquette excitations along its body, and any closed loop
+that anticommutes with a stabilizer has $\langle W\rangle\equiv0$.
+
+**Fix — dress the line with $\sigma^x$.** Write the operator as $Z(\ell)\,X(s)$:
+$\sigma^z$ on the line $\ell$, plus a $\sigma^x$ dressing $s$. It commutes with
+$\tilde B_p=Z(\partial p)X(d_p)$ iff $|\ell\cap d_p|+|s\cap\partial p|$ is even.
+(Vertex stars are automatic — $\sigma^x$ dressing commutes with the all-$\sigma^x$
+stars, and $\ell$ shares an even number of edges with each star except at its
+endpoints.) So choose $s$ solving, over GF(2),
+
+$$\sum_{e\in\partial p} s_e \;\equiv\; |\ell\cap d_p| \pmod 2 \quad\forall p,
+\qquad\text{i.e. } M\,s = t,\ \ M_{p,e}=[e\in\partial p],\ t_p=|\ell\cap d_p|\bmod2.$$
+
+This is `dressed_string(geom, stabs, z_edges)` in
+`Three_TC/model/fermionic_decoration.py` (a ~12-line `_gf2_solve` + the assembly).
+
+- **Closed wrapping loop** → $M s=t$ is consistent → a fully **conserved Wilson
+  loop** $W$ (verified: dressing of 4 σˣ at L=2 / 6 at L=3, disjoint from the
+  line, 0 residual, commutes with the whole stabilizer group).
+- **Open half-string** → $M s=t$ is **inconsistent**: the cubes containing the
+  endpoints are frustrated, so a flux-free open string *cannot exist*. The
+  solver returns the consistent-subsystem solution, leaving a **localized
+  residual of exactly 2 plaquettes** (one flux per endpoint). Each endpoint thus
+  carries a charge (violated star) **and** a flux (violated plaquette) — that
+  charge+flux composite is the **fermion**. This non-existence of a flux-free
+  open string is the operational statement that the excitation is fermionic.
+
+  (The residual of an inconsistent GF(2) system is solver/ordering dependent; the
+  *canonical* `fermionic_plaquettes` plaquette order yields the minimal,
+  endpoint-localized residual = 2. Both notebooks use it, so they agree.)
+
+**Order parameter.** Fredenhagen–Marcu ratio
+$O_{FM}=\langle S\rangle/\sqrt{|\langle W\rangle|}$ with $S$ the open dressed
+fermion string and $W$ the conserved loop, measured via
+`expect_xz_string`. Plotted with its $h_z$-derivative (transition = peak),
+alongside the conserved $\langle W\rangle$, the spectral gap, and
+$\langle M_z\rangle$ as robust diagnostics. Implemented in the fermionic sweep of
+`2D_TC_phase_diag.ipynb` (cells `tdfsetup`/`tdfsweep`/`tdfplot`) and
+`colab/fermionic_TC_colab.ipynb`.
+
+**L=2 caveat.** At $L=2$ PBC the open string is a single edge with no bulk, so
+$O_{FM}$ may be inconclusive; $\langle W\rangle$, the gap, and $\langle M_z\rangle$
+are the reliable signals. A clean $O_{FM}$ needs $L\ge3$–$4$, which is past ED
+reach — run those on Colab if a bigger machine is available.
+
 ### Open follow-ups (physics, not blockers)
-- Confirm the emergent point excitation is genuinely a fermion (statistics /
-  braiding), beyond the gap-doubling signature already seen.
+- Confirm the emergent point excitation is genuinely a fermion via braiding
+  statistics (the open-string flux obstruction above is strong evidence).
 - Full ground-state degeneracy on $T^3$ (needs `k` large enough in `eigsh`;
   only the lowest 10 were inspected, showing a doublet at $E_0=-32$).
-- BFFM / $h_z$ sweep for the fermionic model, mirroring the bosonic notebook
-  section.
+- A provably minimum-weight (ordering-independent) open-string residual via
+  syndrome decoding of the cube code, if larger $L$ is ever run.
 
 ## Earlier path attempted and ruled out
 
