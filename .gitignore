@@ -3,4 +3,5 @@ __pycache__/
 .DS_Store
 .ipynb_checkpoints/
 .venv/
-Three_TC/tests/wandb/
+wandb/
+outputs/
