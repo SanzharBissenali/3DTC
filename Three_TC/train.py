@@ -87,8 +87,13 @@ def train(config: Dict[str, Any]) -> Dict[str, Any]:
     # Device detection (reused util): picks GPU if present and returns the
     # default chain count (1024 GPU / 16 CPU). An explicit --n_chains still wins.
     _gpu, _node, n_chains_auto = setup_environment()
+    is_gpu = n_chains_auto > 16          # setup_environment: 1024 GPU / 16 CPU
     if "n_chains" not in config:
         cfg["n_chains"] = n_chains_auto
+    # Double the sample budget on GPU (cheap there) for lower-variance gradients;
+    # an explicit --n_samples still wins.
+    if "n_samples" not in config and is_gpu:
+        cfg["n_samples"] = 2 * cfg["n_samples"]
 
     name = _run_name(cfg)
     cfg["name"] = name

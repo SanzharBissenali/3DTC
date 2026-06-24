@@ -111,7 +111,7 @@ def build_sampler(config: Dict[str, Any], hi, geo):
         (samp_ratio / (samp_ratio + 1), 1 - samp_ratio / (samp_ratio + 1)),
         [nk.sampler.rules.LocalRule(), MultiRule(vertex_clusters)],
     )
-    n_sweeps = config.get("n_sweeps") or geo.N // 2
+    n_sweeps = config.get("n_sweeps") or geo.N * 2
     return nk.sampler.MetropolisSampler(
         hi, rule=weighted, n_chains=config.get("n_chains", 16),
         n_sweeps=n_sweeps, dtype=jnp.int8)

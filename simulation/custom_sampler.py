@@ -112,8 +112,10 @@ class MultiRule(nk.sampler.rules.MetropolisRule):
         # Split the rng key into 2: one for each random operation
         key_indx, key_flip = jax.random.split(key, 2)
 
-        # Pick random cluster index on every chain
-        indxs = jax.random.randint(key_indx, shape=(n_chains, 1), minval=0, maxval=n_clusters-1)
+        # Pick random cluster index on every chain. maxval is EXCLUSIVE, so it
+        # must be n_clusters (not n_clusters-1) or the last vertex cluster can
+        # never be flipped — losing one star move from the ergodic set.
+        indxs = jax.random.randint(key_indx, shape=(n_chains, 1), minval=0, maxval=n_clusters)
 
         @jax.vmap
         def flip(sigma, cluster):
