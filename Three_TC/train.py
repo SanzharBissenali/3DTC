@@ -230,6 +230,8 @@ def _parse_args() -> Dict[str, Any]:
     # Sampling
     p.add_argument("--n_samples", type=int, default=D)
     p.add_argument("--n_chains", type=int, default=D)
+    p.add_argument("--n_sweeps", type=int, default=D,
+                   help="Metropolis sweeps between recorded samples (default 2N = 48 at L=2)")
     p.add_argument("--n_discard", type=int, default=D)
     p.add_argument("--chunk_size", type=int, default=D)
     # Output / logging
