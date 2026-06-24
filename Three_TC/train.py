@@ -132,7 +132,8 @@ def train(config: Dict[str, Any]) -> Dict[str, Any]:
 
     t0 = time.time()
     run_loop(vs, Ham, n_iter=cfg["n_iter"], dt=cfg["dt"],
-             diag_shift=cfg["diag_shift"], on_step=on_step, lr_min=cfg["lr_min"])
+             diag_shift=cfg["diag_shift"], on_step=on_step, lr_min=cfg["lr_min"],
+             qgt=cfg.get("qgt", "auto"))
     runtime_s = time.time() - t0
 
     obs = nqs_observables(vs, Ham, geo, xz_stabs=xz_stabs)
@@ -215,6 +216,11 @@ def _parse_args() -> Dict[str, Any]:
     p.add_argument("--lr_min", type=float, default=D,
                    help="if set, cosine-decay lr from --dt down to this over n_iter")
     p.add_argument("--diag_shift", type=float, default=D)
+    p.add_argument("--qgt", choices=["auto", "dense", "onthefly"], default=D,
+                   help="SR geometric tensor: dense (QGTJacobianDense — fast, robust; "
+                        "wants n_samples >= n_params), onthefly (matrix-free CG), or "
+                        "auto (dense iff n_params <= 8192). Use 'dense' on GPU — the "
+                        "onthefly/CG path is the one that fails there.")
     p.add_argument("--seed", type=int, default=D)
     # Sampling
     p.add_argument("--n_samples", type=int, default=D)

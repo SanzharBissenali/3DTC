@@ -38,7 +38,7 @@ echo "task ${SLURM_ARRAY_TASK_ID}: hz_preset=$HZ_PRESET  params=$PARAMS"
 srun -n 1 python -m Three_TC.train \
   --L 2 --bc PBC --model bosonic --arch ToricCNN_full \
   --hx 0.2 --hz_preset "$HZ_PRESET" \
-  --n_iter 250 --n_samples 16384 --n_chains 1024 \
+  --n_iter 250 --n_samples 16384 --n_chains 1024 --qgt dense \
   --out_dir "$PSCRATCH/tc_nqs/${HZ_PRESET}" \
   --wandb_group "${SLURM_JOB_NAME}-${HZ_PRESET}" \
   --name "cfg${SLURM_ARRAY_TASK_ID}" \
