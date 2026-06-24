@@ -39,8 +39,13 @@ def init_run(
     config: Dict[str, Any],
     name: Optional[str] = None,
     tags: Optional[list] = None,
+    group: Optional[str] = None,
 ):
-    """Initialize a wandb run. Returns the run object."""
+    """Initialize a wandb run. Returns the run object.
+
+    `group` ties all runs of a sweep together (one wandb group) so they can be
+    compared/plotted side by side — pass the SLURM job name for an array sweep.
+    """
     import os
 
     # The wandb-core subprocess inherits these macOS allocator-debug vars and
@@ -58,11 +63,12 @@ def init_run(
         config=config,
         name=name,
         tags=tags,
+        group=group,
         reinit=True,
     )
 
 
-def log_step(run, step: int, E, vs) -> None:
+def log_step(run, step: int, E, vs, exact_E0: Optional[float] = None) -> None:
     """Log per-step VMC scalars.
 
     Args:
@@ -70,21 +76,27 @@ def log_step(run, step: int, E, vs) -> None:
         step: integer iteration index
         E:   netket Stats object from vs.expect(H)
         vs:  variational state (for sampler/acceptance info)
+        exact_E0: if given, also log the figure of merit
+                  delta = |E - E_exact| / |E_exact| (and the absolute energy
+                  error) so the FOM is plotted live and comparable across runs.
     """
     acc = float(vs.sampler_state.n_accepted) / max(1, float(vs.sampler_state.n_steps))
 
-    run.log(
-        {
-            "step": step,
-            "energy":              float(np.real(E.mean)),
-            "energy_error":        float(np.real(E.error_of_mean)),
-            "energy_variance":     float(np.real(E.variance)),
-            "tau_corr":            float(np.real(E.tau_corr)),
-            "R_hat":               float(np.real(E.R_hat)),
-            "mcmc_acceptance":     acc,
-        },
-        step=step,
-    )
+    metrics = {
+        "step": step,
+        "energy":              float(np.real(E.mean)),
+        "energy_error":        float(np.real(E.error_of_mean)),
+        "energy_variance":     float(np.real(E.variance)),
+        "tau_corr":            float(np.real(E.tau_corr)),
+        "R_hat":               float(np.real(E.R_hat)),
+        "mcmc_acceptance":     acc,
+    }
+    if exact_E0 is not None:
+        e = float(np.real(E.mean))
+        metrics["energy_abs_err"] = abs(e - exact_E0)
+        metrics["delta"] = abs(e - exact_E0) / abs(exact_E0)
+
+    run.log(metrics, step=step)
 
 
 def finish_run(run, vs, Ham, geo, extra: Optional[Dict[str, Any]] = None,

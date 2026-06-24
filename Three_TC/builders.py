@@ -95,7 +95,11 @@ def build_model(config: Dict[str, Any], geo):
     if arch == "ToricCNN":
         return ToricCNN(km=km, plaq_all=plaq_tuple, hidden=hidden)
     if arch == "ToricCNN_full":
-        return ToricCNN_full(km=km, plaq_all=plaq_tuple, hidden=hidden)
+        return ToricCNN_full(
+            km=km, plaq_all=plaq_tuple, hidden=hidden,
+            noninv_channels=config.get("noninv_channels", 1),
+            n_noninv=config.get("n_noninv", 1),
+            inv_hidden=tuple(config.get("inv_hidden", ()) or ()))
     raise ValueError(f"unknown arch {arch!r} (expected ToricCNN or ToricCNN_full)")
 
 
@@ -132,12 +136,19 @@ def build_state(config: Dict[str, Any]) -> Tuple[Any, Any, Any, Any, Any]:
 # =============================================================================
 
 def run_loop(vs, Ham, n_iter: int, dt: float, diag_shift: float,
-             on_step: Optional[Callable] = None, lr_min: Optional[float] = None):
+             on_step: Optional[Callable] = None, lr_min: Optional[float] = None,
+             qgt: str = "auto"):
     """VMC + Sgd + SR(diag_shift) for n_iter steps.
 
     Learning rate: constant `dt` by default, or — if `lr_min` is given — a cosine
     decay from `dt` down to `lr_min` across the `n_iter` steps
     (`optax.cosine_decay_schedule`, alpha = lr_min/dt).
+
+    `qgt` selects the SR geometric-tensor representation: "dense"
+    (QGTJacobianDense — form the matrix once + direct solve; ~9x faster for the
+    few-thousand-parameter nets here), "onthefly" (NetKet's CG default, matrix-
+    free; for n_params ≫ n_samples or when the dense n_params^2 matrix would not
+    fit), or "auto" (dense when n_params ≤ 8192, else onthefly).
 
     If `on_step` is given it is called as on_step(step, E, vs) each iteration
     (with a fresh `E = vs.expect(Ham)`); pass None to skip per-step expectation
@@ -150,7 +161,12 @@ def run_loop(vs, Ham, n_iter: int, dt: float, diag_shift: float,
     else:
         lr = dt
     opt = nk.optimizer.Sgd(learning_rate=lr)
-    sr = nk.optimizer.SR(diag_shift=diag_shift)
+    use_dense = qgt == "dense" or (qgt == "auto" and vs.n_parameters <= 8192)
+    if use_dense:
+        sr = nk.optimizer.SR(qgt=nk.optimizer.qgt.QGTJacobianDense,
+                             diag_shift=diag_shift, holomorphic=False)
+    else:
+        sr = nk.optimizer.SR(diag_shift=diag_shift)
     driver = nk.driver.VMC(Ham, opt, variational_state=vs, preconditioner=sr)
     for step in range(n_iter):
         driver.advance(1)

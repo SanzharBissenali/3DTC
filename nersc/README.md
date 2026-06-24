@@ -81,6 +81,35 @@ Each array task → `run_ed.py` → `Three_TC/tests/colab_exact_diag.py::run`,
 writing `ed_L2_hx0.3_hz<value>.json`. `run_ed.py` is a thin env-var wrapper
 (`HX/HY/HZ/L/J/K/OUT`) so the same script can sweep any field.
 
+## 4.5 Phase 4 — NQS hyperparameter sweep (GPU)
+
+The variational (NetKet) path runs on the **GPU** nodes. One-time env build on a
+**login** node, then a GPU job array — one config per task, each logging the
+delta figure of merit to wandb.
+
+```bash
+# 1. one-time GPU env (jax[cuda12] + netket) + wandb auth (login node)
+bash nersc/setup_conda_gpu.sh
+module load conda && conda activate tc-nqs && wandb login
+
+# 2. edit the grid in scripts/sweep_params.py, then size the array to it
+N=$(python scripts/sweep_params.py --count)            # e.g. 36
+
+# 3. submit; HZ_PRESET picks the hardcoded ED point (hard|mid|easy)
+HZ_PRESET=mid sbatch --array=0-$((N-1)) nersc/submit_nqs_sweep.sh
+```
+
+Each task runs `Three_TC/train.py` on **1 A100** with `--n_chains 1024`
+(auto-detected) and `--hz_preset`, which sets both `h_z` and `E_exact` so
+`delta = |E - E_exact|/|E_exact|` is printed per step and logged live to wandb.
+All tasks share the wandb group `tc-nqs-sweep-<preset>` for side-by-side
+comparison. Output JSON/weights go to `$PSCRATCH/tc_nqs/<preset>/`.
+
+`scripts/sweep_params.py` is the single source of truth for the grid (learning
+rate, diag_shift, pre-Wilson capacity, post-Wilson width); array index → combo,
+exactly like the ED sweep maps index → h_z. If compute nodes can't reach wandb,
+`export WANDB_MODE=offline` in the submit script and `wandb sync` later.
+
 ## 5. Monitoring & control
 
 ```bash
@@ -110,8 +139,9 @@ scontrol show job <jobid>   # full detail while pending/running
       from `colab/fermionic_TC_colab.ipynb` into a `run_fermionic_sweep.py` so the
       Fredenhagen–Marcu / Wilson-loop sweep runs as a batch job (parallel matvec
       → wants the full 128-core node).
-- [ ] **GPU / NetKet env** for the NQS path: separate conda env with
-      `jax[cuda12]` + `netket`, jobs on `--constraint=gpu --gpus 4 --account mXXXX_g`.
+- [x] **GPU / NetKet env** for the NQS path — `nersc/setup_conda_gpu.sh` (env
+      `tc-nqs`: `jax[cuda12]` + `netket`) and `nersc/submit_nqs_sweep.sh` (GPU job
+      array, `--constraint=gpu --gpus=1 --account m5340_g`). See Phase 4 above.
 - [ ] Decide output home: keep JSON on `$PSCRATCH` during runs, archive to
       `/global/cfs/cdirs/<proj>` once a sweep is complete.
 

@@ -367,28 +367,40 @@ class ToricCNN(nn.Module):
 
 
 class ToricCNN_full(nn.Module):
-    """Full architecture: CNN_noninvariant → Wilson → CNN_invariant ×2 → mean.
+    """Full architecture: CNN_noninvariant ×n → Wilson (per channel) →
+    CNN_invariant ×(depth) → mean.
 
-    The non-invariant edge block is identity-initialised, so at step 0 it passes
-    edge spins through unchanged and the model reduces exactly to ToricCNN; under
-    training it learns the quasi-adiabatic edge deformation that represents the
-    field-perturbed (A_v-breaking, h_z) state.
+    Capacity knobs (defaults reproduce the original 1-channel / [hidden,1] net):
+        noninv_channels  C  — edge channels in the pre-Wilson block.
+        n_noninv            — number of stacked pre-Wilson layers.
+        inv_hidden  (tuple) — post-Wilson hidden widths; () → (hidden,).
+
+    The pre-Wilson layers are eye-initialised on the 'self' stencil column, so at
+    step 0 the deformation is the identity on channel 0 (raw spins → true flux)
+    and the model is still an exact function of B_p, i.e. exactly A_v-invariant —
+    a near-symmetric warm start. Training then learns the A_v-breaking (h_z)
+    deformation. With C>1 the extra channels start at 0 and grow under training.
     """
     km: Any
     plaq_all: tuple
     hidden: int = 8
+    noninv_channels: int = 1
+    n_noninv: int = 1
+    inv_hidden: tuple = ()
     dtype: Any = jnp.float64
 
     @nn.compact
     def __call__(self, x):                      # x: (..., N) spins ±1
         plaq_idx = jnp.asarray(self.plaq_all)
+        C = self.noninv_channels
 
         h = x[..., None, :].astype(self.dtype)                          # (..., 1, N)
-        h = CNN_noninvariant_3D(self.km, 1, self.dtype)(h)              # (..., 1, N)
-        edges = h[..., 0, :]                                            # (..., N)
+        for _ in range(self.n_noninv):
+            h = CNN_noninvariant_3D(self.km, C, self.dtype)(h)         # (..., C, N)
 
-        wilson = jnp.prod(edges[..., plaq_idx], axis=-1)               # (..., N_plaq)
-        g = wilson[..., None, :]                                        # (..., 1, N_plaq)
-        g = CNN_invariant_3D(self.km, self.hidden, self.dtype)(g)
+        # Wilson 4-product per channel: (..., C, N) → (..., C, N_plaq)
+        g = jnp.prod(h[..., plaq_idx], axis=-1)
+        for w in (self.inv_hidden or (self.hidden,)):
+            g = CNN_invariant_3D(self.km, w, self.dtype)(g)
         g = CNN_invariant_3D(self.km, 1, self.dtype)(g)
         return jnp.mean(g, axis=(-2, -1))                              # (...,) log ψ

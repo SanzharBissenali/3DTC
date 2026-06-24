@@ -30,9 +30,13 @@ from typing import Any, Dict
 
 import numpy as np
 
+import jax
+jax.config.update("jax_enable_x64", True)  # float64 SR/QGT (esp. on GPU)
+
 from Three_TC.builders import build_state, run_loop, with_defaults
 from Three_TC.validation import nqs_observables
 from Three_TC.utils.wandb_logger import init_run, log_step, finish_run
+from utils.config import setup_environment
 from utils.io import save_model
 
 
@@ -42,6 +46,15 @@ TRAIN_DEFAULTS: Dict[str, Any] = {
     "wandb_project": "approx-sym-3D-TC",
     "wandb_entity": "models-california-institute-of-technology-caltech",
     "tags": None, "name": None,
+}
+
+# Hardcoded reference points from threed_bosonic.json (L=2 PBC bosonic, hx=0.2,
+# J=1): label -> (h_z, E_exact, gap). Selected with --hz_preset; sets both the
+# field and the E_exact used for the delta figure of merit.
+HZ_PRESETS: Dict[str, tuple] = {
+    "hard": (0.1184210526315789, -32.2968435820, 0.062),   # small gap (hardest)
+    "mid":  (0.3157894736842105, -33.9620095053, 0.943),   # validated point
+    "easy": (0.5526315789473684, -38.5935624665, 3.452),   # large gap (easiest)
 }
 
 
@@ -61,33 +74,56 @@ def train(config: Dict[str, Any]) -> Dict[str, Any]:
     if cfg["hy"] != 0.0:
         raise NotImplementedError(
             "hy != 0 (sign problem) needs a complex ansatz; not supported yet.")
+
+    # h_z preset -> set the field AND the E_exact used for the delta FOM.
+    # --exact_E0 (or config["exact_E0"]) is the manual fallback at any h_z.
+    if config.get("hz_preset"):
+        hz, e0, _gap = HZ_PRESETS[config["hz_preset"]]
+        cfg["hz"], cfg["exact_E0"] = hz, e0
+    else:
+        cfg["exact_E0"] = config.get("exact_E0")
+    exact_E0 = cfg.get("exact_E0")
+
+    # Device detection (reused util): picks GPU if present and returns the
+    # default chain count (1024 GPU / 16 CPU). An explicit --n_chains still wins.
+    _gpu, _node, n_chains_auto = setup_environment()
+    if "n_chains" not in config:
+        cfg["n_chains"] = n_chains_auto
+
     name = _run_name(cfg)
     cfg["name"] = name
     os.makedirs(cfg["out_dir"], exist_ok=True)
 
     geo, hi, Ham, vs, xz_stabs = build_state(cfg)
-    print(f"[train] {name}: N={geo.N}  n_params={vs.n_parameters}  model={cfg['model']}")
+    print(f"[train] {name}: N={geo.N}  n_params={vs.n_parameters}  model={cfg['model']}"
+          f"  n_chains={cfg['n_chains']}"
+          + (f"  E_exact={exact_E0}" if exact_E0 is not None else ""))
 
     run = None
     if cfg["wandb"]:
         run = init_run(project=cfg["wandb_project"], entity=cfg["wandb_entity"],
-                       config=cfg, name=name,
+                       config=cfg, name=name, group=cfg.get("wandb_group"),
                        tags=cfg["tags"] or [cfg["model"], cfg["arch"], f"L={cfg['L']}"])
 
-    curve = {"step": [], "energy": [], "energy_err": [], "energy_spread": []}
+    curve = {"step": [], "energy": [], "energy_err": [], "energy_spread": [], "delta": []}
 
     def on_step(step, E, vs):
         e   = float(np.real(E.mean))
         de  = float(np.real(E.error_of_mean))      # delta_E (MC error on the mean)
         var = float(np.real(E.variance))
+        delta = abs(e - exact_E0) / abs(exact_E0) if exact_E0 is not None else None
         curve["step"].append(step)
         curve["energy"].append(e)
         curve["energy_err"].append(de)
         curve["energy_spread"].append(np.sqrt(var))
-        print(f"  step {step:4d}/{cfg['n_iter']}:  E = {e:+.6f} ± {de:.6f}"
-              f"   (spread, sqrt(var) = {np.sqrt(var):.4f})", flush=True)
+        curve["delta"].append(delta)
+        msg = (f"  step {step:4d}/{cfg['n_iter']}:  E = {e:+.6f} ± {de:.6f}"
+               f"   (spread, sqrt(var) = {np.sqrt(var):.4f})")
+        if delta is not None:
+            msg += f"   delta = {delta:.3e}"
+        print(msg, flush=True)
         if run is not None:
-            log_step(run, step, E, vs)
+            log_step(run, step, E, vs, exact_E0=exact_E0)
 
     t0 = time.time()
     run_loop(vs, Ham, n_iter=cfg["n_iter"], dt=cfg["dt"],
@@ -95,8 +131,12 @@ def train(config: Dict[str, Any]) -> Dict[str, Any]:
     runtime_s = time.time() - t0
 
     obs = nqs_observables(vs, Ham, geo, xz_stabs=xz_stabs)
+    if exact_E0 is not None:                               # final FOM -> run.summary
+        obs["E_exact"] = exact_E0
+        obs["delta"] = abs(obs["E0"] - exact_E0) / abs(exact_E0)
     print(f"[train] done in {runtime_s:.1f}s  E={obs['E0']:.4f}  Vscore={obs['Vscore']:.2e}  "
-          f"<A_v>={obs['A_v_mean']:.3f}  <sz>={obs['sz_mean']:.3f}")
+          + (f"delta={obs['delta']:.3e}  " if exact_E0 is not None else "")
+          + f"<A_v>={obs['A_v_mean']:.3f}  <sz>={obs['sz_mean']:.3f}")
 
     # --- artifacts: model weights (.mpack) + local run JSON ---
     weights_base = os.path.join(cfg["out_dir"], name)
@@ -112,16 +152,16 @@ def train(config: Dict[str, Any]) -> Dict[str, Any]:
     print(f"[train] saved {weights_base}.json and {weights_base}.mpack")
 
     if run is not None:
-        finish_run(run, vs, Ham, geo,
-                   extra={"runtime_s": runtime_s, "n_params": int(vs.n_parameters)},
-                   observables=obs)
-        try:                                           # optional: weights as W&B artifact
-            import wandb
-            art = wandb.Artifact(name.replace("/", "_"), type="model")
-            art.add_file(f"{weights_base}.mpack")
+        try:                                           # weights as W&B artifact —
+            import wandb                                # must run BEFORE finish_run,
+            art = wandb.Artifact(name.replace("/", "_"), type="model")  # which calls
+            art.add_file(f"{weights_base}.mpack")       # run.finish() (closes the run)
             run.log_artifact(art)
         except Exception as e:                         # noqa: BLE001
             print(f"[train] W&B artifact upload skipped: {e}")
+        finish_run(run, vs, Ham, geo,
+                   extra={"runtime_s": runtime_s, "n_params": int(vs.n_parameters)},
+                   observables=obs)
 
     return result
 
@@ -149,9 +189,21 @@ def _parse_args() -> Dict[str, Any]:
     p.add_argument("--hy", type=float, default=D)
     p.add_argument("--hz", type=float, default=D)
     p.add_argument("--J", type=float, default=D)
+    p.add_argument("--hz_preset", choices=list(HZ_PRESETS), default=D,
+                   help="set h_z AND E_exact from a hardcoded ED reference point "
+                        "(hard/mid/easy); enables the delta figure of merit")
+    p.add_argument("--exact_E0", type=float, default=D,
+                   help="E_exact for the delta FOM at a custom h_z (alternative to "
+                        "--hz_preset)")
     # Architecture
     p.add_argument("--arch", choices=["ToricCNN", "ToricCNN_full"], default=D)
     p.add_argument("--hidden", type=int, default=D)
+    p.add_argument("--noninv_channels", type=int, default=D,
+                   help="ToricCNN_full: edge channels C in each pre-Wilson block")
+    p.add_argument("--n_noninv", type=int, default=D,
+                   help="ToricCNN_full: number of non-invariant blocks before Wilson")
+    p.add_argument("--inv_hidden", type=int, nargs="*", default=D,
+                   help="ToricCNN_full: post-Wilson hidden widths, e.g. --inv_hidden 16 16")
     # Training
     p.add_argument("--n_iter", type=int, default=D)
     p.add_argument("--dt", type=float, default=D, help="(initial) learning rate")
@@ -169,6 +221,9 @@ def _parse_args() -> Dict[str, Any]:
     p.add_argument("--out_dir", default=D)
     p.add_argument("--wandb_project", default=D)
     p.add_argument("--wandb_entity", default=D)
+    p.add_argument("--wandb_group", default=D,
+                   help="wandb group tying a sweep's runs together for comparison "
+                        "(e.g. the SLURM job name)")
     p.add_argument("--no_wandb", action="store_true", help="disable W&B logging")
 
     cfg = vars(p.parse_args())
