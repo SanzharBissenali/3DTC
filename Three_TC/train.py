@@ -207,7 +207,9 @@ def _parse_args() -> Dict[str, Any]:
                    help="E_exact for the delta FOM at a custom h_z (alternative to "
                         "--hz_preset)")
     # Architecture
-    p.add_argument("--arch", choices=["ToricCNN", "ToricCNN_full", "VanillaCNN"], default=D)
+    p.add_argument("--arch",
+                   choices=["ToricCNN", "ToricCNN_full", "VanillaCNN", "VanillaWilsonCNN"],
+                   default=D)
     p.add_argument("--hidden", type=int, default=D)
     p.add_argument("--vanilla_depth", type=int, default=D,
                    help="VanillaCNN: number of hidden conv layers (default 2)")

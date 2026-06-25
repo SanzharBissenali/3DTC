@@ -411,6 +411,77 @@ class VanillaCNN(nn.Module):
         return out.reshape(lead)
 
 
+class VanillaWilsonCNN(nn.Module):
+    """Wilson-sandwich architecture built from STANDARD grid convs (nn.Conv +
+    CIRCULAR padding), NOT GeoConv3D.
+
+    Same information flow as ToricCNN_full —
+        edge features → per-channel Wilson 4-product (flux) → plaquette features
+        → mean log ψ
+    — but every conv folds the three sublattice orientations into a channel axis
+    and runs a vanilla cubic grid conv (the half-offset approximation that
+    KernelManager3D removes). Lets you A/B the geometry-exact kernel against a
+    plain conv while *keeping* the Wilson nonlinearity. Defaults reproduce the
+    requested noninv=[1], inv=[4,1].
+
+    Static fields:
+        shape       (3, Lx, Ly, Lz) of the edge orientation→grid fold.
+        edges_flat  flattened qubit indices in `shape` order (perm of 0..N-1).
+        plaq_all    (N_plaq, 4) flat qubit indices, for the Wilson product.
+    Plaquette flat order is itself ravel(c, ix, iy, iz) over (3, Lx, Ly, Lz)
+    (geometry.plaq_all order), so the plaquette fold needs no index map.
+    """
+    shape: tuple                       # (3, Lx, Ly, Lz)
+    edges_flat: tuple                  # len N
+    plaq_all: tuple                    # (N_plaq, 4)
+    noninv_channels: int = 1
+    n_noninv: int = 1
+    inv_hidden: tuple = (4,)
+    kernel_size: int = 3
+    dtype: Any = jnp.float64
+
+    @nn.compact
+    def __call__(self, x):                      # x: (..., N) spins ±1
+        O, Lx, Ly, Lz = self.shape              # O = 3
+        ks = (self.kernel_size,) * 3
+        idx_flat = jnp.asarray(self.edges_flat)         # (N,) grid-cell → qubit id
+        plaq_idx = jnp.asarray(self.plaq_all)           # (N_plaq, 4)
+        lead = x.shape[:-1]
+        x2 = x.reshape((-1, x.shape[-1])).astype(self.dtype)   # (B, N)
+        B, N = x2.shape
+        N_plaq = O * Lx * Ly * Lz
+
+        def grid_conv(h, idx, M, C_out, act):
+            """(B, C_in, M) flat → fold to (Lx,Ly,Lz, C_in·3) → nn.Conv → (B, C_out, M).
+            idx maps flat slot → grid-cell order (None ⇒ identity, for plaquettes)."""
+            C_in = h.shape[1]
+            hg = h if idx is None else h[:, :, idx]      # (B, C_in, M) grid order
+            hg = hg.reshape((B, C_in, O, Lx, Ly, Lz))
+            hg = jnp.transpose(hg, (0, 3, 4, 5, 1, 2)).reshape(
+                (B, Lx, Ly, Lz, C_in * O))               # channels-last (C_in·O)
+            y = nn.Conv(features=C_out * O, kernel_size=ks, padding="CIRCULAR",
+                        param_dtype=self.dtype)(hg)
+            y = act(y).reshape((B, Lx, Ly, Lz, C_out, O))
+            y = jnp.transpose(y, (0, 4, 5, 1, 2, 3)).reshape((B, C_out, M))  # grid order
+            if idx is None:
+                return y
+            return jnp.zeros((B, C_out, M), self.dtype).at[:, :, idx].set(y)
+
+        # noninvariant blocks on the EDGE grid (±1 → ±1 range via normalised sigmoid)
+        h = x2[:, None, :]                               # (B, 1, N)
+        for _ in range(self.n_noninv):
+            h = grid_conv(h, idx_flat, N, self.noninv_channels, _normalised_sigmoid)
+
+        # per-channel Wilson 4-product: (B, C, N) → (B, C, N_plaq)
+        g = jnp.prod(h[:, :, plaq_idx], axis=-1)
+
+        # invariant blocks on the PLAQUETTE grid (flat order already = grid order)
+        for w in self.inv_hidden:
+            g = grid_conv(g, None, N_plaq, w, nn.elu)
+        g = grid_conv(g, None, N_plaq, 1, nn.elu)        # final 1 channel
+        return jnp.mean(g, axis=(1, 2)).reshape(lead)    # (...,) real log ψ
+
+
 class ToricCNN_full(nn.Module):
     """Full architecture: CNN_noninvariant ×n → Wilson (per channel) →
     CNN_invariant ×(depth) → mean.

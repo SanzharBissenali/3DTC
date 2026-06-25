@@ -30,7 +30,8 @@ from Three_TC.model.hamiltonian import (
     create_hamiltonian, create_hamiltonian_fermionic)
 from Three_TC.model.fermionic_decoration import fermionic_plaquettes
 from Three_TC.model.networks import (
-    ToricCNN, ToricCNN_full, VanillaCNN, KernelManager3D, compute_edges_3D)
+    ToricCNN, ToricCNN_full, VanillaCNN, VanillaWilsonCNN,
+    KernelManager3D, compute_edges_3D)
 
 
 DEFAULTS: Dict[str, Any] = {
@@ -96,6 +97,16 @@ def build_model(config: Dict[str, Any], geo):
         return VanillaCNN(
             shape=tuple(edges.shape), edges_flat=tuple(int(i) for i in edges.reshape(-1)),
             hidden=hidden, depth=config.get("vanilla_depth", 2),
+            kernel_size=config.get("kernel_size", 3))
+    if arch == "VanillaWilsonCNN":
+        # Wilson sandwich (noninv → Wilson → inv) with plain grid convs, no GeoConv3D
+        edges = compute_edges_3D(geo)            # (3, Lx, Ly, Lz)
+        return VanillaWilsonCNN(
+            shape=tuple(edges.shape), edges_flat=tuple(int(i) for i in edges.reshape(-1)),
+            plaq_all=plaq_tuple,
+            noninv_channels=config.get("noninv_channels", 1),
+            n_noninv=config.get("n_noninv", 1),
+            inv_hidden=tuple(config.get("inv_hidden", (4,)) or ()),
             kernel_size=config.get("kernel_size", 3))
     km = KernelManager3D(geo,
                          radius_edge=config.get("radius_edge", 1.05),
