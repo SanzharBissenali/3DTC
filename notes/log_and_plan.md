@@ -1,6 +1,71 @@
-# Plan: Extending Kufel et al.'s Approximately-Symmetric NQS to the 3D Toric Code
+# Log & Plan: Approximately-Symmetric NQS for the 3D Toric Code
 
-## Context
+> Formerly `3D_extension_plan.md`. The architecture-extension plan below is
+> now **mostly executed** (and in places redirected). This top section is the
+> living log; the original plan is kept underneath as the design record.
+
+## Current research direction — mapping out the phase diagram
+
+The architecture extension and the training/validation infrastructure are in
+place. The active goal is now to **map out the 3D toric-code phase diagram**
+(topological → trivial transition under a uniform field) with the NQS ansatz —
+starting from faithfully reproducing **bosonic TC at L=2** before scaling up and
+moving to the sign-full fermionic TC.
+
+**Immediate goal:** find the architecture + training + sampling hyperparameters
+that closely reproduce bTC at L=2 (validated against exact diagonalisation).
+
+## Work done so far
+
+- **Architecture extended 2D → 3D.** `KernelManager3D`, `GeoConv3D`,
+  `CNN_invariant_3D` / `CNN_noninvariant_3D`, and the `ToricCNN` /
+  `ToricCNN_full` ansätze in `Three_TC/model/networks.py`. The Wilson 4-product
+  enforces A_v invariance unchanged in 3D; the symmetric-only net reaches the
+  exact h=0 ground state at L=2/3/4 PBC (see Checkpoint 1 in
+  `notes/progress_log.md`).
+- **Exact 3D kernel manager.** `KernelManager3D` removes the 2D ring-traversal
+  approximation: for each output site it scans the exact **15-spin
+  neighbourhood** — the site itself + 8 nearest neighbours + 6 next-nearest —
+  via precomputed gather/mask/scatter index arrays (generalising the 2D
+  hor/vert kernels to a 3×3 orientation-pair structure).
+- **Training + validation pipeline.** `Three_TC/validation.py` scores ansätze
+  against the Colab L=2 exact reference (`eps_E`, V-score, stabiliser/
+  magnetisation deviations with MC pulls, parameter/runtime cost), for both
+  bosonic and fermionic models. See `notes/pipeline.md` and Checkpoint 2 in
+  `notes/progress_log.md`.
+
+## Daily log
+
+### 2026-06-24
+- **Met with Norm — research direction approved.** Three-part program:
+  (1) generalise the CNN NQS architecture to 3D, (2) reproduce the 3D **bosonic**
+  TC phase diagram, (3) extend the architecture + phase diagram to the 3D
+  **fermionic** TC (the sign-full problem).
+- Training + validation pipeline (against exact L=2) is in place.
+- **Open problem: unstable training.** `tau_corr` and `R̂` spike during training.
+  Suspected to need hyperparameter tuning on three fronts: optimiser dynamics
+  (`lr`, `diag_shift`), MCMC sampling, and possibly the architecture itself.
+- Implemented the **exact `KernelManager3D`**: scans the 15-spin neighbourhood
+  one spin at a time (1 self + 8 nearest + 6 next-nearest).
+
+---
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Original plan (design record)
+
+### Context
 
 The user has a working understanding of the 2D toric-code paper
 ([arXiv:2405.17541](https://arxiv.org/abs/2405.17541)) and the repository
@@ -12,9 +77,9 @@ concrete implementation plan for the 3D extension, anchored to specific
 files and patterns in the existing 2D codebase that should be re-used or
 generalised.
 
-## Literature scout: what already exists
+### Literature scout: what already exists
 
-### Direct prior art (must be aware of)
+#### Direct prior art (must be aware of)
 
 - **Luo, Liu, Halverson, Hsu et al. (2021, arXiv:2101.07243; PRR 5, 013216,
   2023): "Gauge Invariant and Anyonic Symmetric Transformer and RNN Quantum
@@ -36,7 +101,7 @@ generalised.
   solution as a special case, demonstrated perimeter-to-area Wilson
   loop transition. Methodologically very close to Kufel et al. but 2D.
 
-### Competing methods in 3D
+#### Competing methods in 3D
 
 - **Tensor networks for (3+1)d toric code** (e.g., Schwarz et al.,
   arXiv:2012.15631, Quantum 2021; PRB 104, 235151 on TN stability).
@@ -46,7 +111,7 @@ generalised.
   this is the gold-standard baseline for diagonal perturbations.
   **Niche for NQS: hy (Y-field) or other non-stoquastic perturbations.**
 
-### Strategic implication
+#### Strategic implication
 
 The novelty bar is *not* "represent the unperturbed 3D toric code" —
 that's been done. Headline-worthy contributions live in:
@@ -57,7 +122,7 @@ that's been done. Headline-worthy contributions live in:
 3. **Generalisation to X-cube / fracton models** — symmetry trick may
    port; even fewer methods work there.
 
-## Physics scope of the extension
+### Physics scope of the extension
 
 3D toric code, **PBC, qubits on edges of cubic lattice**:
 - N = 3·L³ qubits
@@ -73,9 +138,9 @@ hits 6 edges at v; any plaquette intersects those 6 edges in either 0 or 2
 edges → ∏σ_z over 4 plaquette edges is **still A_v-invariant in 3D**. The
 Wilson nonlinearity from the 2D paper generalises *unchanged*.
 
-## Implementation plan (anchored to existing code)
+### Implementation plan (anchored to existing code)
 
-### Module-by-module change table
+#### Module-by-module change table
 
 | Module | Status | Change |
 |---|---|---|
@@ -91,7 +156,7 @@ Wilson nonlinearity from the 2D paper generalises *unchanged*.
 | `utils/config.py` | minor | Add `Lz` parameter; update `N` calculation for 3D PBC: `N = 3*Lx*Ly*Lz`. |
 | `main.py` | minor | Switch on `--dimension 2/3` to select geometry class; everything downstream stays. |
 
-### Sequenced development order
+#### Sequenced development order
 
 1. **`geometry3d.py`** (PBC only, no OBC). Validate at L=2 with hand-checks:
    24 qubits, 8 vertices (each touching 6 distinct qubits), 24 plaquettes
@@ -124,7 +189,7 @@ Wilson nonlinearity from the 2D paper generalises *unchanged*.
    approach to e-confinement transition. **This is where the paper-shaped
    contribution lives.**
 
-### Critical re-use patterns from the 2D code
+#### Critical re-use patterns from the 2D code
 
 - The **identity initialisation idiom** in `identity_initializer_CNN_links`
   is the secret sauce that makes training start near the symmetric fixed
@@ -137,7 +202,7 @@ Wilson nonlinearity from the 2D paper generalises *unchanged*.
 - The **JSON+mpack output format** in `utils/config.py` / `utils/io.py`
   is fine to reuse; just bump the `kind` annotation to `"G-NonInv-3D"`.
 
-## Verification
+### Verification
 
 End-to-end checks the implementation must pass before committing to the
 real experiments:
@@ -159,7 +224,7 @@ real experiments:
    published QMC values (need to find the right reference — likely
    Vidal et al. for 3D TC + parallel field).
 
-## Estimated effort
+### Estimated effort
 
 - Steps 1–3 (geometry + minimal symmetric net): **1–2 weeks**
 - Steps 4–5 (sampler + non-symmetric block + small perturbations):
@@ -170,7 +235,7 @@ Total: ~2–3 months for a working prototype, ~6 months to a publishable
 result. The architectural concept ports cleanly; the work is in the
 3D plumbing and in losing exact-diag as a safety net.
 
-## Immediate next action (before any 3D code)
+### Immediate next action (before any 3D code)
 
 Finish reading the 2D codebase — specifically `model/geometry.py` and
 `model/networks.py` — until each function's purpose can be predicted in

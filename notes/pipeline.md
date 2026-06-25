@@ -10,14 +10,14 @@ toric code at scale. Two models (bosonic, fermionic), two architectures
 
 ```
         EXACT REFERENCE (Colab)                     NQS TRAINING (local CPU or Colab GPU)
-  ┌───────────────────────────────┐         ┌──────────────────────────────────────────┐
+  ┌───────────────────────────────┐          ┌──────────────────────────────────────────┐
   │ Three_TC/tests/colab_exact_    │         │ Three_TC/validation.py                    │
   │   diag.py                      │  JSON   │   run_validation(configs, regimes,        │
   │   matrix-free eigsh @ L=2 PBC  │ ──────► │     fermionic=…)                          │
   │   bosonic  OR  fermionic=True  │ outputs/│   → train each ansatz @ each h_z regime   │
   │   → expectation-value JSON     │         │   → score vs the loaded reference JSON     │
-  └───────────────────────────────┘         │   → outputs/validation_L2_<model>.json     │
-                                            └──────────────────────────────────────────┘
+  └───────────────────────────────┘          │   → outputs/validation_L2_<model>.json     │
+                                              └──────────────────────────────────────────┘
 ```
 
 The exact track produces a **JSON of expectation values only** (no state

@@ -139,8 +139,8 @@ for each chain in parallel:
 Total Metropolis proposals per iteration:
 `n_chains × (n_discard + n_samples/n_chains) × (n_sweeps + 1)`.
 
-Example with N=24 qubits, `n_chains=16, n_discard=8, n_samples=1024,
-n_sweeps=12`:  `16 × (8 + 64) × 13 ≈ 15,000 proposals`.
+<!-- Example with N=24 qubits, `n_chains=16, n_discard=8, n_samples=1024,
+n_sweeps=12`:  `16 × (8 + 64) × 13 ≈ 15,000 proposals`. -->
 
 Each proposal is a single-spin flip plus a log-amplitude evaluation. The
 log-amplitude evaluation is the dominant cost.

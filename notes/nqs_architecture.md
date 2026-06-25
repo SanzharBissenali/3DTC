@@ -107,3 +107,4 @@ layer grows with the new S.
 Even this half-offset-exact kernel cannot separate the `+ê` and `−ê` neighbour at
 L=2 (same site under PBC). Intrinsic to L=2, not to the kernel; the stencil radius
 buys nothing extra there (`networks.py:49`).
+

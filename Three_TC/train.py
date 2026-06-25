@@ -207,8 +207,12 @@ def _parse_args() -> Dict[str, Any]:
                    help="E_exact for the delta FOM at a custom h_z (alternative to "
                         "--hz_preset)")
     # Architecture
-    p.add_argument("--arch", choices=["ToricCNN", "ToricCNN_full"], default=D)
+    p.add_argument("--arch", choices=["ToricCNN", "ToricCNN_full", "VanillaCNN"], default=D)
     p.add_argument("--hidden", type=int, default=D)
+    p.add_argument("--vanilla_depth", type=int, default=D,
+                   help="VanillaCNN: number of hidden conv layers (default 2)")
+    p.add_argument("--kernel_size", type=int, default=D,
+                   help="VanillaCNN: cubic conv kernel extent (default 3)")
     p.add_argument("--noninv_channels", type=int, default=D,
                    help="ToricCNN_full: edge channels C in each pre-Wilson block")
     p.add_argument("--n_noninv", type=int, default=D,

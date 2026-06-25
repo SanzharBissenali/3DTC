@@ -366,6 +366,51 @@ class ToricCNN(nn.Module):
         return jnp.mean(h, axis=(-2, -1))                               # (...,) log ψ
 
 
+class VanillaCNN(nn.Module):
+    """Plain grid CNN baseline — the 'easy mode' diagnostic ansatz.
+
+    Deliberately does NOT use KernelManager3D/GeoConv3D. The flat spin vector is
+    folded into a (Lx, Ly, Lz, 3) tensor (the three edge orientations become a
+    channel axis, co-located at each cube vertex) and run through standard
+    `nn.Conv` with CIRCULAR padding. This is exactly the half-offset
+    approximation the geometry-exact kernel removes — so comparing its MCMC
+    acceptance against ToricCNN/ToricCNN_full isolates whether the custom gather/
+    scatter kernel is what's collapsing acceptance.
+
+    log ψ(x) is real (sum-pool over sites + final 1-channel conv); fine for the
+    Perron–Frobenius-positive (h_y = 0) Hamiltonians here.
+
+    Static fields:
+        shape       (3, Lx, Ly, Lz) of the orientation→grid fold.
+        edges_flat  flattened qubit indices in `shape` order (a permutation of
+                    0..N-1); built once via `compute_edges_3D`.
+    """
+    shape: tuple                       # (3, Lx, Ly, Lz)
+    edges_flat: tuple                  # len N = 3·Lx·Ly·Lz
+    hidden: int = 8
+    depth: int = 2
+    kernel_size: int = 3
+    dtype: Any = jnp.float64
+
+    @nn.compact
+    def __call__(self, x):                      # x: (..., N) spins ±1
+        O, Lx, Ly, Lz = self.shape
+        idx = jnp.asarray(self.edges_flat).reshape(self.shape)   # (3, Lx, Ly, Lz)
+        lead = x.shape[:-1]
+        g = x[..., idx]                          # (..., 3, Lx, Ly, Lz)
+        g = jnp.moveaxis(g, -4, -1)              # (..., Lx, Ly, Lz, 3) channels-last
+        g = g.reshape((-1, Lx, Ly, Lz, O)).astype(self.dtype)    # (B, Lx, Ly, Lz, 3)
+        ks = (self.kernel_size,) * 3
+        for _ in range(self.depth):
+            g = nn.Conv(features=self.hidden, kernel_size=ks, padding="CIRCULAR",
+                        param_dtype=self.dtype)(g)
+            g = nn.elu(g)
+        g = nn.Conv(features=1, kernel_size=ks, padding="CIRCULAR",
+                    param_dtype=self.dtype)(g)
+        out = jnp.sum(g, axis=(1, 2, 3, 4))      # (B,) real log ψ
+        return out.reshape(lead)
+
+
 class ToricCNN_full(nn.Module):
     """Full architecture: CNN_noninvariant ×n → Wilson (per channel) →
     CNN_invariant ×(depth) → mean.

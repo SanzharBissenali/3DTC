@@ -29,7 +29,8 @@ from Three_TC.model.geometry import ThreeD_ToricCodeGeometry
 from Three_TC.model.hamiltonian import (
     create_hamiltonian, create_hamiltonian_fermionic)
 from Three_TC.model.fermionic_decoration import fermionic_plaquettes
-from Three_TC.model.networks import ToricCNN, ToricCNN_full, KernelManager3D
+from Three_TC.model.networks import (
+    ToricCNN, ToricCNN_full, VanillaCNN, KernelManager3D, compute_edges_3D)
 
 
 DEFAULTS: Dict[str, Any] = {
@@ -89,6 +90,13 @@ def build_model(config: Dict[str, Any], geo):
     plaq_tuple = tuple(tuple(p) for p in geo.plaq_all)
     hidden = config.get("hidden", 8)
     arch = config.get("arch", "ToricCNN_full")
+    if arch == "VanillaCNN":
+        # plain grid CNN baseline — bypasses KernelManager3D entirely
+        edges = compute_edges_3D(geo)            # (3, Lx, Ly, Lz)
+        return VanillaCNN(
+            shape=tuple(edges.shape), edges_flat=tuple(int(i) for i in edges.reshape(-1)),
+            hidden=hidden, depth=config.get("vanilla_depth", 2),
+            kernel_size=config.get("kernel_size", 3))
     km = KernelManager3D(geo,
                          radius_edge=config.get("radius_edge", 1.05),
                          radius_plaq=config.get("radius_plaq", 1.05))
