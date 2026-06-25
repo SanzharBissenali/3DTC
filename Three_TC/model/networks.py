@@ -438,6 +438,7 @@ class VanillaWilsonCNN(nn.Module):
     n_noninv: int = 1
     inv_hidden: tuple = (4,)
     kernel_size: int = 3
+    noninv_identity: bool = True       # identity-init noninv block (step-0 pass-through)
     dtype: Any = jnp.float64
 
     @nn.compact
@@ -451,7 +452,14 @@ class VanillaWilsonCNN(nn.Module):
         B, N = x2.shape
         N_plaq = O * Lx * Ly * Lz
 
-        def grid_conv(h, idx, M, C_out, act):
+        def _grid_identity_init(key, shape, dtype=jnp.float64):
+            # shape = (k, k, k, C_in_total, C_out_total); eye at spatial centre →
+            # step-0 pass-through (channel i → channel i), zeros elsewhere.
+            c = shape[0] // 2
+            w = jnp.zeros(shape, dtype=dtype)
+            return w.at[c, c, c].set(jnp.eye(shape[-2], shape[-1], dtype=dtype))
+
+        def grid_conv(h, idx, M, C_out, act, identity=False):
             """(B, C_in, M) flat → fold to (Lx,Ly,Lz, C_in·3) → nn.Conv → (B, C_out, M).
             idx maps flat slot → grid-cell order (None ⇒ identity, for plaquettes)."""
             C_in = h.shape[1]
@@ -459,8 +467,10 @@ class VanillaWilsonCNN(nn.Module):
             hg = hg.reshape((B, C_in, O, Lx, Ly, Lz))
             hg = jnp.transpose(hg, (0, 3, 4, 5, 1, 2)).reshape(
                 (B, Lx, Ly, Lz, C_in * O))               # channels-last (C_in·O)
+            kw = (dict(kernel_init=_grid_identity_init, bias_init=nn.initializers.zeros)
+                  if identity else {})
             y = nn.Conv(features=C_out * O, kernel_size=ks, padding="CIRCULAR",
-                        param_dtype=self.dtype)(hg)
+                        param_dtype=self.dtype, **kw)(hg)
             y = act(y).reshape((B, Lx, Ly, Lz, C_out, O))
             y = jnp.transpose(y, (0, 4, 5, 1, 2, 3)).reshape((B, C_out, M))  # grid order
             if idx is None:
@@ -470,7 +480,8 @@ class VanillaWilsonCNN(nn.Module):
         # noninvariant blocks on the EDGE grid (±1 → ±1 range via normalised sigmoid)
         h = x2[:, None, :]                               # (B, 1, N)
         for _ in range(self.n_noninv):
-            h = grid_conv(h, idx_flat, N, self.noninv_channels, _normalised_sigmoid)
+            h = grid_conv(h, idx_flat, N, self.noninv_channels, _normalised_sigmoid,
+                          identity=self.noninv_identity)
 
         # per-channel Wilson 4-product: (B, C, N) → (B, C, N_plaq)
         g = jnp.prod(h[:, :, plaq_idx], axis=-1)

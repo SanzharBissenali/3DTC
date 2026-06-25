@@ -214,7 +214,10 @@ def _parse_args() -> Dict[str, Any]:
     p.add_argument("--vanilla_depth", type=int, default=D,
                    help="VanillaCNN: number of hidden conv layers (default 2)")
     p.add_argument("--kernel_size", type=int, default=D,
-                   help="VanillaCNN: cubic conv kernel extent (default 3)")
+                   help="VanillaCNN/VanillaWilsonCNN: cubic conv kernel extent (default 3)")
+    p.add_argument("--noninv_random", action="store_true",
+                   help="VanillaWilsonCNN: random-init the noninv block instead of "
+                        "identity warm start (default is identity pass-through)")
     p.add_argument("--noninv_channels", type=int, default=D,
                    help="ToricCNN_full: edge channels C in each pre-Wilson block")
     p.add_argument("--n_noninv", type=int, default=D,
@@ -254,6 +257,10 @@ def _parse_args() -> Dict[str, Any]:
     # --no_wandb only forces wandb off; otherwise leave it to TRAIN_DEFAULTS.
     if cfg.pop("no_wandb", False):
         cfg["wandb"] = False
+    # --noninv_random flips the default identity warm start off (store_true always
+    # present in the dict; only act when set so omission falls through to defaults).
+    if cfg.pop("noninv_random", False):
+        cfg["noninv_identity"] = False
     return cfg
 
 

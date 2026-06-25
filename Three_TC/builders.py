@@ -107,7 +107,8 @@ def build_model(config: Dict[str, Any], geo):
             noninv_channels=config.get("noninv_channels", 1),
             n_noninv=config.get("n_noninv", 1),
             inv_hidden=tuple(config.get("inv_hidden", (4,)) or ()),
-            kernel_size=config.get("kernel_size", 3))
+            kernel_size=config.get("kernel_size", 3),
+            noninv_identity=config.get("noninv_identity", True))
     km = KernelManager3D(geo,
                          radius_edge=config.get("radius_edge", 1.05),
                          radius_plaq=config.get("radius_plaq", 1.05))
