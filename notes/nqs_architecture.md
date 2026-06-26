@@ -136,3 +136,135 @@ Two OBC-specific points:
 `VanillaCNN`/`VanillaWilsonCNN` stay PBC-only (CIRCULAR padding + dense
 `(3,L,L,L)` fold); `build_model` raises on Vanilla\*+OBC.
 
+---
+
+## How the net becomes A_v-symmetry-aware (the actual mechanism)
+
+The target symmetry is the vertex operator: `ψ(s) = ψ(A_v s)`, where `A_v` flips
+the spins on the 6 edges meeting a vertex (4 in 2D). Old approaches *tied weights*
+to enforce this. This codebase instead does a **change of coordinates** so the
+symmetry becomes automatic — no constraint.
+
+**The trick = the Wilson 4-product** (`jnp.prod(x[..., plaq_idx], axis=-1)`,
+`networks.py:555`; 2D `_Wilson_4spin_plaq`). Each plaquette `p ↦ B_p = ∏_{i∈p}s_i`.
+`A_v` flips **0 or 2** edges of any plaquette, so `B_p ↦ (−1)^{0 or 2} B_p = B_p`.
+The map E→P is therefore **identically A_v-invariant for any input**, with no
+weight constraint. This survives the 4→6 edges/vertex jump unchanged: the count is
+still 0-or-2 per plaquette in 3D.
+
+Everything **downstream of Wilson** sees only `B_p`, so it is exactly invariant for
+*any* weights — that's why the post-Wilson stack can be an unconstrained CNN.
+
+### Three-stage flow (`ToricCNN_full`, `networks.py:522`)
+
+    spins ±1  (E)
+      │  CNN_noninvariant_3D  (E→E)   optional, identity-init   ← symmetry-BREAKING knob
+      ▼
+    edge features (E)
+      │  Wilson 4-product     (E→P)                             ← the invariant change of coords
+      ▼
+    plaquette fluxes (P)   ── A_v-invariant from here down, any weights ──
+      │  CNN_invariant_3D ×k (P→P) + ELU
+      ▼
+    mean → log ψ
+
+### Pre-Wilson block = the approximate-symmetry knob
+
+For the Wilson product to stay invariant, each output edge `x_i` must be **per-edge
+sign-equivariant**: flip sign iff its *own* spin flips, untouched by neighbour
+flips. That holds **only at identity-init**: kernel = 1 on the self tap, 0
+elsewhere (`_geo_identity_init`), zero bias, and an **odd** activation
+(`_normalised_sigmoid`, scaled so ±1↦±1, `networks.py:271`). Then `x_i = f(s_i)` and
+the whole net is **exactly** A_v-invariant at step 0 (reduces to `ToricCNN`).
+
+The instant training moves an off-diagonal weight, `x_i` mixes neighbour spins →
+no longer a clean sign flip under `A_v` → Wilson product no longer invariant. So the
+non-invariant block is the *tunable, warm-started* symmetry breaker — needed off the
+`h_z=0` line where the true ground state isn't A_v-symmetric. Drop it entirely
+(`ToricCNN`) for the exact-symmetry `h_x`-only sector.
+
+Same 15-tap conv, opposite consequence by placement: mixing **raw spins** breaks
+symmetry; mixing **fluxes** can't.
+
+### Post-Wilson conv — worked example (L=3 PBC, plaq lattice)
+
+`CNN_invariant_3D` = `GeoConv3D(lattice="plaq")`: identical gather/sum/scatter
+machinery, now on the **3 face-normal plaquette sublattices**. Output plaquette
+`p_0` = idx 0, orientation `c_out=0` (normal x). Its 15-tap gather row:
+
+    [0,  45,48,27,30,  72,73,54,55,  18,6,2,1,3,9]
+     self  └ 4 y-normal ┘ └ 4 z-normal ┘ └─ 6 x-normal ─┘
+     d=0   d=0.707         d=0.707         d=1.0
+
+    h[j,p0] = elu( Σ_{s=0..14} W[0, j, 0, s] · B_gather[s]  +  b[0,j] )
+            = elu( w0·B(0) + w1·B(45) + … + w14·B(9) + b )
+
+The d=0.707 taps are plaquettes **sharing an edge** with `p_0` (perpendicular faces
+hinged on a common edge); the d=1.0 taps are **parallel faces** one cell over. Each
+`B_p` is already A_v-invariant, so this weighted neighbour-sum builds *flux
+correlations* without ever breaking symmetry. Weights `W[0,…]` are shared across all
+27 x-normal plaquettes; `W[1]`,`W[2]` are independent stencils for y,z normals —
+that per-orientation sharing is the 3-sublattice structure.
+
+## 2D vs 3D — what actually differs
+
+| | 2D (`model/networks.py`) | 3D (`Three_TC/model/networks.py`) |
+|---|---|---|
+| pre-Wilson conv | `CNN_noninvariant` (link lattice) | `GeoConv3D(lattice="edge")` |
+| post-Wilson conv | `CNN_invariant` (single square dual lattice) | `GeoConv3D(lattice="plaq")`, **3 face-normal sublattices** |
+| conv class | two separate hand-built classes | one `GeoConv3D`, switched by `lattice` flag |
+| Wilson rescale | only in **complex** branch (`10**1.5`); real branch none | none — real (`h_y=0`) sector |
+| log ψ | complex supported | real |
+
+Two real conceptual differences hide here: (1) 3D plaquettes are a **3-sublattice**
+object (half-offset), so the geometry-exact stencil is needed *post*-Wilson too, not
+just pre; (2) 3D commits to the **real positive (Perron–Frobenius, h_y=0) sector**,
+so the complex-only `rescale` never enters. The `_normalised_sigmoid` factor
+`(2+2e)/(e−1)≈2.79` is *not* a rescale analog — it only keeps the identity-init
+pass-through (±1↦±1) in the pre-Wilson block.
+
+## Extending to the fermionic TC — what transfers, what breaks
+
+Decoration: `B̃_p = (∏_{∂p}σᶻ)·σˣ_{e+}·σˣ_{e−}` (`fermionic_decoration.py`).
+**Vertex stars A_v are unchanged** — that single fact decides everything.
+
+**The A_v machinery transfers unchanged.** ∏σᶻ over a plaquette boundary is still
+exactly A_v-invariant (same 4 boundary edges, A_v still flips 0/2 of them), and the
+fermionic GS is still a +1 A_v-eigenstate with A_v all-σˣ ⇒ `ψ(A_v s)=ψ(s)`
+**exactly, phase included**. So the Wilson change-of-coordinates + invariant CNN
+backbone stays correct. **Keep Wilson.**
+
+**No "decorated Wilson" nonlinearity — and none is needed.** B̃_p contains σˣ
+(off-diagonal): `B̃_p|s⟩ ∝ |s'⟩` with two flipped bits, so it is *not* a function of
+one bitstring — there's no pointwise nonlinearity for it. But the diagonal
+A_v-invariants are products of σᶻ over cycles, generated by plaquette boundaries +
+global Wilson loops — **identical** to bosonic. The σˣ decoration adds **no new
+diagonal invariant**, so the bare flux features already form a *complete*
+A_v-invariant basis.
+
+**What breaks: the sign (non-stoquasticity).** `⟨s'|(−J B̃_p)|s⟩ = −J·(∏_{∂p}σᶻ on
+s) = ∓J` — positive off-diagonal elements occur ⇒ no Perron–Frobenius positivity ⇒
+the fermionic GS has genuine negative/complex amplitudes. Since the diagonal feature
+basis is unchanged, the **entire** bosonic→fermionic difference lives in the
+amplitude **sign/phase** over each A_v orbit. The current **real `log ψ`** (h_y=0)
+sector cannot represent it. The sign is a function on A_v orbits = a function of
+`{B_p}` + Wilson loops, so a *complex* invariant CNN can represent it in principle;
+the hard part is **optimisation** (sign-problem-flavoured).
+
+**Plan (highest leverage first):**
+1. **Clifford disentangler test** — does a finite-depth Clifford `U` map the bosonic
+   stabiliser group to the fermionic one? Cheap GF(2) (reuse `_gf2_solve`). **Yes** →
+   conjugate inputs by `U†`, sign vanishes, the real net works verbatim. **No** → the
+   sign is topologically intrinsic; must be learned.
+2. **Complexify** `GeoConv3D` (port the 2D complex branch: split activations, complex
+   params), keep Wilson + invariant CNN as the A_v-invariant complex backbone; a
+   separate phase head may help.
+3. **Sampler / `E_loc`**: add the B̃_p 2-edge-flip off-diagonal moves (like extra hx).
+4. **Validate** vs ED on the **FM ratio** (dressed σˣ string), gap, ⟨Mz⟩ — phases now
+   matter, not just magnitudes (L=2 local; L≥3 Colab only).
+
+**One-liner:** A_v is unchanged ⇒ Wilson + the whole symmetry trick survive; the
+fermion lives entirely in the wavefunction **sign**, so the real-positive ansatz must
+go complex — unless a finite-depth Clifford disentangler conjugates it back to the
+stoquastic bosonic problem.
+

@@ -95,6 +95,32 @@ deferred (`fermionic_decoration._idx` still PBC-hardcoded).
   notebook ED matches repo `model/exact_diag.py` exactly (`E₀(.2,.2)=−14.279396`);
   `ToricCNN_full` under OBC trains to **`eps_E=1.1e-4`** (150 iters, dense QGT).
 
+### 2026-06-26 — Conceptual: extending the symmetry-aware net to the *fermionic* TC
+
+Analysis only (no code yet), ahead of program step 3 (fermionic phase diagram).
+**Where the architecture transfers and where it breaks** — see `nqs_architecture.md`
+("Extending to the fermionic TC") for the full argument.
+
+- **Wilson nonlinearity + A_v machinery transfer unchanged.** Vertex stars are
+  identical in the fermionic model (`fermionic_decoration.py:9`); only plaquettes
+  are decorated. ∏σᶻ over a boundary is still exactly A_v-invariant, and the
+  fermionic GS is still exactly A_v-symmetric *including phase*. **Keep Wilson.**
+- **No "decorated Wilson" is possible — or needed.** B̃_p carries σˣ (off-diagonal),
+  so it isn't a function of one bitstring. But the σˣ adds **no new diagonal
+  A_v-invariant**: the bare flux features already form a complete invariant basis.
+- **What actually breaks: the sign.** −J·B̃_p has mixed-sign off-diagonal matrix
+  elements (∓J), so the fermionic GS is **non-stoquastic** — the real-`log ψ`
+  (h_y=0) sector the 3D net is built for fails. The entire fermionic content lives
+  in the wavefunction **sign/phase**, which the current real ansatz throws away.
+- **Plan:** (1) **highest leverage** — test whether a finite-depth **Clifford
+  disentangler** U maps fermionic→bosonic stabilisers (cheap GF(2), reuses
+  `_gf2_solve`): if yes, conjugate inputs by U† and the real net works verbatim; if
+  no, the sign is topologically intrinsic. (2) If needed, **complexify** `GeoConv3D`
+  (port the 2D complex branch), keep Wilson+invariant CNN as the A_v-invariant
+  complex backbone, consider a separate phase head. (3) Add B̃_p 2-edge-flip moves
+  to `E_loc`/sampler. (4) Validate on FM ratio + gap + ⟨Mz⟩ vs ED (L=2 local; L≥3
+  Colab only).
+
 ---
 
 
