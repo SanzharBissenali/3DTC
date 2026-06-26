@@ -5,6 +5,47 @@ checkpoints record discrete milestones; the most recent is at the top.
 
 ---
 
+## Checkpoint 4 — OBC enabled for the symmetry-aware CNN (bosonic, L=2)
+
+OBC is now a first-class boundary condition via the existing `--bc OBC` flag (no new
+flag). PBC paths are **byte-identical**; bosonic only (fermionic OBC deferred).
+
+### What changed
+
+- **Geometry** — OBC `plaq_all` keeps only **complete 4-edge faces** (incomplete
+  boundary faces dropped: they'd corrupt the ED Z-strings *and* the Wilson product).
+  New `plaq_centers` + `_plaq_center_to_idx` map (single source of truth for the
+  plaquette conv).
+- **`KernelManager3D`** — no longer rejects OBC. Edge stencils **mask** out-of-box
+  neighbours instead of `% L` wrapping; plaquette stencils are now **coordinate-
+  based** (via the centre map) for both BCs. `build_model` errors on Vanilla\*+OBC
+  (CIRCULAR padding is PBC-only).
+- **Sampler** (`build_sampler`) — clusters strip `-1` and pad to width 6; fixes the
+  L=2 OBC divide-by-zero (no full bulk stars exist) and the `MultiRule` `-1` flip.
+- **`bc` threaded** through `validation.py` / `optimize.py` (default PBC).
+- **New Colab** `colab/3D_TC_OBC_ED_colab.ipynb` — self-contained OBC ED, 5×5
+  `(hx,hz)` grid → per-point reference JSONs + E₀/gap heatmaps.
+
+### Geometry facts (L=2 OBC)
+
+`N = 3L³−3L² = 12`, 6 complete-face plaquettes, 8 truncated vertex stars (no full
+bulk star exists at L=2). All `A_v`/`B_p` commute. Per-orientation edge/plaquette
+counts are uniform (cube symmetry), so the `(3,P,S)` stencil tensors stay rectangular.
+
+### Verification
+
+- PBC plaquette stencils **byte-identical** to the old `pidx` arithmetic.
+- `test_geometry.py` OBC assertions pass at L=2 and L=3.
+- Inline notebook ED == repo `model/exact_diag.py`: `E₀(hx=hz=0.2)=−14.279396`.
+- `ToricCNN_full` under OBC → **`eps_E=1.1e-4`** (150 iters, dense QGT, 4096 samples).
+
+### Next
+
+Sweep OBC vs PBC `eps_E` across the grid to confirm the OBC-does-better claim; then
+fermionic OBC (needs `fermionic_decoration._idx` BC gating).
+
+---
+
 ## Checkpoint 3 — MCMC acceptance pinned down as phase-dependent; lr×diag_shift sweep launched
 
 ### The acceptance puzzle, resolved

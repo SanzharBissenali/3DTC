@@ -91,6 +91,10 @@ def build_model(config: Dict[str, Any], geo):
     plaq_tuple = tuple(tuple(p) for p in geo.plaq_all)
     hidden = config.get("hidden", 8)
     arch = config.get("arch", "ToricCNN_full")
+    if geo.bc == "OBC" and arch in ("VanillaCNN", "VanillaWilsonCNN"):
+        raise ValueError(
+            f"{arch} is PBC-only (CIRCULAR padding + dense (3,L,L,L) fold); "
+            "use ToricCNN or ToricCNN_full for OBC.")
     if arch == "VanillaCNN":
         # plain grid CNN baseline — bypasses KernelManager3D entirely
         edges = compute_edges_3D(geo)            # (3, Lx, Ly, Lz)
@@ -124,8 +128,19 @@ def build_model(config: Dict[str, Any], geo):
 
 
 def build_sampler(config: Dict[str, Any], hi, geo):
-    """WeightedRule(LocalRule, vertex-cluster MultiRule) — the topological-phase fix."""
-    vertex_clusters = np.array(geo.vertex_all)              # (N_v, 6)
+    """WeightedRule(LocalRule, vertex-cluster MultiRule) — the topological-phase fix.
+
+    Each cluster is a vertex star's edges. Under OBC the boundary stars are
+    truncated (fewer than 6 edges, padded with -1 in geo.vertex_all); we strip the
+    -1 and pad each cluster back to width 6 by repeating its last valid edge. The
+    MultiRule flip is `.at[cluster].set(-...)`, idempotent under duplicate indices,
+    so a padded cluster flips exactly its distinct edges — correct for truncated
+    stars (and at L=2 OBC there are no full bulk stars at all). PBC is unaffected:
+    every star already has 6 distinct edges, so the padding is a no-op.
+    """
+    hetero = geo.get_vertex_all_hetero()                   # -1 stripped, ragged
+    width = max(len(v) for v in hetero)
+    vertex_clusters = np.array([v + [v[-1]] * (width - len(v)) for v in hetero])
     samp_ratio = geo.N / len(vertex_clusters)
     weighted = WeightedRule(
         (samp_ratio / (samp_ratio + 1), 1 - samp_ratio / (samp_ratio + 1)),

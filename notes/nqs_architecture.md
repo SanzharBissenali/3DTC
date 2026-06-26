@@ -108,3 +108,31 @@ Even this half-offset-exact kernel cannot separate the `+ê` and `−ê` neighbo
 L=2 (same site under PBC). Intrinsic to L=2, not to the kernel; the stencil radius
 buys nothing extra there (`networks.py:49`).
 
+## OBC: mask, don't wrap
+
+`KernelManager3D` takes `bc` from the geometry. **PBC** wraps neighbour lookups
+(`coord % L`) — every tap exists, so `edge_mask`/`plaq_mask` are all-ones. **OBC**
+does *not* wrap: a stencil tap that lands outside the open box `[0,L−1]³` gets
+gather index 0 (a dummy) and **mask 0**, so it contributes nothing to the einsum.
+The per-orientation stencil (its taps and order, including `self_index=0`) is the
+same one computed on the infinite lattice — only the per-site mask changes. So a
+single weight set per orientation still applies everywhere; translation
+equivariance just stops being exact at the boundary (as it must under OBC).
+
+Two OBC-specific points:
+
+- **Output sites.** Edges/plaquettes that don't exist in the open box are not
+  emitted as outputs (the builder skips taps whose centre maps to `-1`). At
+  Lx=Ly=Lz the surviving count is the same for all three orientations, so the
+  `(O=3, P, S)` tensors stay rectangular (L=2: `P_edge=4`, `P_plaq=2`; N=12,
+  N_plaq=6).
+- **Plaquette gather is coordinate-based.** It no longer uses the dense-`L³`
+  `pidx` arithmetic (which assumed every face exists); it looks neighbours up by
+  centre coordinate via `geo._plaq_center_to_idx` (built from `geo.plaq_centers`),
+  which works for both BCs and returns `-1` → mask 0 off the box. OBC `plaq_all`
+  is filtered to **complete faces only**, so the Wilson 4-product has no `-1` to
+  trip over. The PBC gather tables are byte-identical to the old `pidx` path.
+
+`VanillaCNN`/`VanillaWilsonCNN` stay PBC-only (CIRCULAR padding + dense
+`(3,L,L,L)` fold); `build_model` raises on Vanilla\*+OBC.
+

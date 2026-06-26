@@ -105,8 +105,49 @@ def run_all(L=2):
         print(f"  ok  {name}")
 
 
+# ---------------------------------------------------------------------------
+# OBC: truncated vertex stars (-1 padded) + complete-face plaquettes only.
+# ---------------------------------------------------------------------------
+
+def expected_counts_obc(L):
+    """(N qubits, N plaquettes) for an L^3 OBC lattice (Lx=Ly=Lz=L).
+
+    Edges of each orientation live on a (L-1)*L*L subgrid; complete faces of each
+    orientation on a (L-1)^2*L subgrid.
+    """
+    return 3 * L * L * L - 3 * L * L, 3 * (L - 1) ** 2 * L
+
+
+def test_obc(geom, L):
+    Nq, Np = expected_counts_obc(L)
+    assert geom.N == Nq, f"OBC N: {geom.N} != {Nq}"
+    assert len(geom.plaq_all) == Np, f"OBC N_plaq: {len(geom.plaq_all)} != {Np}"
+    assert len(geom.vertex_all) == L ** 3, "one (possibly truncated) star per vertex"
+    # plaquettes are complete 4-edge faces with no -1 padding
+    assert all(-1 not in p for p in geom.plaq_all), "OBC plaq_all must have no -1"
+    assert all(len(set(p)) == 4 for p in geom.plaq_all)
+    # centres parallel to plaq_all and round-trip through the index map
+    assert len(geom.plaq_centers) == len(geom.plaq_all) == len(geom.plaq_orient)
+    assert all(geom._plaq_center_to_idx(geom.plaq_centers[i]) == i
+               for i in range(len(geom.plaq_all)))
+    # commutation still holds (truncated stars vs complete faces)
+    test_stabilizers_commute(geom)
+    # each edge sits in exactly 2 vertex stars (∏A_v = I)
+    test_product_all_vertices_is_identity(geom)
+
+
+def run_all_obc(L=2):
+    geom = ThreeD_ToricCodeGeometry(Lx=L, Ly=L, Lz=L, bc="OBC")
+    test_obc(geom, L)
+    print(f"  ok  OBC counts/commute/centres (N={geom.N}, "
+          f"N_plaq={len(geom.plaq_all)})")
+
+
 if __name__ == "__main__":
     for L in (2, 3):
         print(f"L = {L} PBC")
         run_all(L)
+    for L in (2, 3):
+        print(f"L = {L} OBC")
+        run_all_obc(L)
     print("All geometry tests passed.")

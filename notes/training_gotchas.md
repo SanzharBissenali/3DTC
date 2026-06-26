@@ -4,6 +4,12 @@ A running list of training failure modes and suspects, each with the lever to pu
 if it resurfaces. Add to it as new ones turn up. For the SR/VMC loop internals see
 `vmc_internals.md`; for the end-to-end pipeline see `pipeline.md`.
 
+
+**The rescale parameter** 
+In the 2D version, there is this rescale parameter used in Wilson nonlinearity, which 
+as for as I know is not implemented in 3D version case. we should sweep some values 
+for rescale hyperparameter. 
+
 Started 2026-06-24.
 
 ---

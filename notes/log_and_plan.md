@@ -48,6 +48,53 @@ that closely reproduce bTC at L=2 (validated against exact diagonalisation).
 - Implemented the **exact `KernelManager3D`**: scans the 15-spin neighbourhood
   one spin at a time (1 self + 8 nearest + 6 next-nearest).
 
+### 2026-06-26
+- **MCMC acceptance is phase-dependent, not a bug.** Bit-flip + vertex-flip
+  sampling works well throughout the **topological** phase in both 2D and 3D.
+  The ~1% acceptance rate deep in the **trivial** phase is expected physics
+  (the wavefunction sharpens), *not* a code bug — judge convergence by
+  `R̂` / `tau_corr` / energy instead. (See [[mcmc-acceptance-phase-dependent]].)
+- **Replicate before innovate: chasing Dom's relative error.** Struggling to
+  reproduce Dom's `1e-7`–`1e-8` relative-error results. Currently sitting at
+  **2.2e-4**. Next: sweep architectures and hyperparameters to get the error
+  down to at least `1e-6`–`1e-5` reliably before adding anything new.
+- **Code changes supporting the above:**
+  - Added **`VanillaCNN`** and **`VanillaWilsonCNN`** baseline ansätze
+    (`Three_TC/model/networks.py`) — plain grid CNNs that bypass
+    `KernelManager3D`, for the replicate-first comparison.
+  - `Three_TC/train.py` now exposes `--arch`
+    (`ToricCNN` | `ToricCNN_full` | `VanillaCNN` | `VanillaWilsonCNN`) plus
+    vanilla depth / kernel-extent flags; documented in `notes/training_cli.md`.
+  - `simulation/optimizer.py` now logs **live MCMC acceptance rate** and `R̂`
+    in the progress bar (the diagnostic that settled the acceptance question).
+  - New Colab `colab/2D_TC_ED_NQS_colab.ipynb` (2D ED + NQS reference);
+    removed the stale `notes/claude_handoff.md`.
+
+### 2026-06-26 — OBC enabled for the symmetry-aware CNN (bosonic, L=2)
+
+The pipeline was PBC-only in practice (OBC `--bc OBC` existed but the CNN hard-
+rejected it, and several OBC paths were latently buggy). OBC often gives *lower*
+relative error, so it's now a first-class option via the same `--bc` flag — no new
+flag, **PBC behaviour byte-identical**. Bosonic only this pass; fermionic OBC
+deferred (`fermionic_decoration._idx` still PBC-hardcoded).
+
+- **Geometry** (`geometry.py`): OBC now keeps only **complete 4-edge plaquettes**
+  (incomplete boundary faces dropped — they corrupt both ED Z-strings and the
+  Wilson product), and exposes `plaq_centers` + a `_plaq_center_to_idx` map.
+- **`KernelManager3D`** (`networks.py`): OBC support — edge stencils **mask**
+  out-of-box neighbours instead of wrapping; plaquette stencils are now
+  coordinate-based (via the centre map). `build_model` errors on Vanilla\*+OBC
+  (CIRCULAR padding is intrinsically PBC). See `notes/nqs_architecture.md`.
+- **Sampler** (`builders.py`): vertex clusters strip `-1` and pad to width 6 —
+  fixes the L=2 OBC divide-by-zero (no full bulk stars) and `-1` flips.
+- **`bc` threaded** through `validation.py` / `optimize.py` (default PBC).
+- **New Colab** `colab/3D_TC_OBC_ED_colab.ipynb`: self-contained OBC ED over a 5×5
+  `(hx,hz)∈{0,.1,.2,.3,.4}²` grid → per-point reference JSONs (validation schema)
+  + E₀/gap heatmaps. L=2 OBC is N=12 (2¹²), so ED is local-trivial.
+- **Validated**: geometry/commutation (L=2,3 OBC) in `test_geometry.py`; inline
+  notebook ED matches repo `model/exact_diag.py` exactly (`E₀(.2,.2)=−14.279396`);
+  `ToricCNN_full` under OBC trains to **`eps_E=1.1e-4`** (150 iters, dense QGT).
+
 ---
 
 

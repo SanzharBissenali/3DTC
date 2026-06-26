@@ -49,7 +49,7 @@ def evaluate(config: Dict[str, Any], *,
              seed: int = 0, ref_file: str = REF_FILE,
              ledger: Optional[str] = "outputs/opt_ledger.jsonl",
              label: str = "", verbose: bool = True,
-             probe_every: int = 0) -> Dict[str, Any]:
+             probe_every: int = 0, bc: str = "PBC") -> Dict[str, Any]:
     """Build + train + score one ToricCNN_full config at one h_z. Appends a row
     to `ledger` (JSONL) and returns it.
 
@@ -58,7 +58,7 @@ def evaluate(config: Dict[str, Any], *,
     """
     ref = load_ref(hz_idx, ref_file)
     run_cfg = with_defaults({
-        "L": 2, "bc": "PBC", "model": "bosonic",
+        "L": 2, "bc": bc, "model": "bosonic",
         "hx": HX, "hy": 0.0, "hz": ref["hz"], "J": 1.0,
         "arch": "ToricCNN_full",
         "hidden": config.get("hidden", 8),

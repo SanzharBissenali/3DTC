@@ -25,7 +25,8 @@ hor/vert kernels, now generalised to a 3×3 orientation-pair structure.
 Components
 ----------
     KernelManager3D      — precomputes gather/mask/scatter index arrays from a
-                           ThreeD_ToricCodeGeometry (PBC).
+                           ThreeD_ToricCodeGeometry (PBC wraps; OBC masks the
+                           neighbours that fall outside the open box).
 
     GeoConv3D            — masked-gather convolution on one sublattice family
                            ('edge' or 'plaq'); optional identity-at-self init.
@@ -93,7 +94,7 @@ def _complement(c: int) -> List[int]:
 
 
 class KernelManager3D:
-    """Geometry-exact convolution stencils for the 3D toric code (PBC).
+    """Geometry-exact convolution stencils for the 3D toric code (PBC or OBC).
 
     Public arrays (numpy):
         edge_gather (3, P, S_e) int   — for each output edge of orientation c
@@ -114,9 +115,11 @@ class KernelManager3D:
     """
 
     def __init__(self, geo, radius_edge: float = 1.05, radius_plaq: float = 1.05):
-        if geo.bc != "PBC":
-            raise NotImplementedError(
-                "KernelManager3D supports PBC only (CIRCULAR neighbourhoods).")
+        # PBC: neighbourhoods wrap (CIRCULAR). OBC: neighbours that fall outside
+        # the open box are masked out (edge_mask/plaq_mask = 0) instead of wrapped,
+        # so the same per-orientation stencil is reused with a per-site mask.
+        if geo.bc not in ("PBC", "OBC"):
+            raise NotImplementedError(f"unknown boundary condition {geo.bc!r}")
         self.geo = geo
         self.Lx, self.Ly, self.Lz = geo.Lx, geo.Ly, geo.Lz
         self.N = geo.N
@@ -164,8 +167,9 @@ class KernelManager3D:
         e = np.eye(3)
         in_offsets = [0.5 * e[c] for c in range(3)]
         L = np.array([self.Lx, self.Ly, self.Lz])
+        pbc = self.geo.bc == "PBC"
         gather, mask, out = [], [], []
-        S_ref = None
+        S_ref, P_ref = None, None
         for c_out in range(3):
             stencil = self._stencil(0.5 * e[c_out], in_offsets, radius)
             if S_ref is None:
@@ -175,14 +179,22 @@ class KernelManager3D:
             for ix, iy, iz in itertools.product(
                     range(self.Lx), range(self.Ly), range(self.Lz)):
                 v = np.array([ix, iy, iz], dtype=float)
-                o_c.append(self.geo._mapping3Dto1D((v + 0.5 * e[c_out]) % L))
+                ocoord = v + 0.5 * e[c_out]
+                o_idx = self.geo._mapping3Dto1D(ocoord % L if pbc else ocoord)
+                if o_idx == -1:
+                    continue   # OBC: this output edge lives outside the open box
+                o_c.append(o_idx)
                 row, mrow = [], []
                 for dv, c_in in stencil:
-                    idx = self.geo._mapping3Dto1D((v + dv + 0.5 * e[c_in]) % L)
+                    ncoord = v + dv + 0.5 * e[c_in]
+                    idx = self.geo._mapping3Dto1D(ncoord % L if pbc else ncoord)
                     row.append(idx if idx != -1 else 0)
                     mrow.append(1.0 if idx != -1 else 0.0)
                 g_c.append(row)
                 m_c.append(mrow)
+            if P_ref is None:
+                P_ref = len(o_c)
+            assert len(o_c) == P_ref, "per-orientation edge count must match by symmetry"
             gather.append(g_c)
             mask.append(m_c)
             out.append(o_c)
@@ -196,28 +208,39 @@ class KernelManager3D:
         for c in range(3):
             a, b = _complement(c)
             plaq_off.append(0.5 * (e[a] + e[b]))
-        nside = self.Lx * self.Ly * self.Lz
 
-        def pidx(c, ix, iy, iz):  # geometry.plaq_all order: c outer, iz fastest
-            return (c * nside
-                    + ((ix % self.Lx) * self.Ly + (iy % self.Ly)) * self.Lz
-                    + (iz % self.Lz))
-
+        # Coordinate-based gather against geometry.plaq_centers (single source of
+        # truth, valid for both BC). A neighbour plaquette of orientation c_in at
+        # integer vertex shift dv from the output plaquette sits at centre
+        # out_corner + dv + plaq_off[c_in], where out_corner = out_centre -
+        # plaq_off[c_out]. PBC wraps inside _plaq_center_to_idx; OBC returns -1
+        # (→ mask 0) for neighbours off the open box.
+        geo = self.geo
+        centers, orient = geo.plaq_centers, geo.plaq_orient
         gather, mask, out = [], [], []
-        S_ref = None
+        S_ref, P_ref = None, None
         for c_out in range(3):
             stencil = self._stencil(plaq_off[c_out], plaq_off, radius)
             if S_ref is None:
                 S_ref = len(stencil)
             assert len(stencil) == S_ref, "stencil length must match by symmetry"
             g_c, m_c, o_c = [], [], []
-            for ix, iy, iz in itertools.product(
-                    range(self.Lx), range(self.Ly), range(self.Lz)):
-                o_c.append(pidx(c_out, ix, iy, iz))
-                row = [pidx(c_in, ix + dv[0], iy + dv[1], iz + dv[2])
-                       for dv, c_in in stencil]
+            for p in range(len(centers)):
+                if orient[p] != c_out:
+                    continue
+                o_c.append(p)
+                out_corner = np.asarray(centers[p], dtype=float) - plaq_off[c_out]
+                row, mrow = [], []
+                for dv, c_in in stencil:
+                    ncenter = out_corner + np.asarray(dv) + plaq_off[c_in]
+                    idx = geo._plaq_center_to_idx(ncenter)
+                    row.append(idx if idx != -1 else 0)
+                    mrow.append(1.0 if idx != -1 else 0.0)
                 g_c.append(row)
-                m_c.append([1.0] * S_ref)
+                m_c.append(mrow)
+            if P_ref is None:
+                P_ref = len(o_c)
+            assert len(o_c) == P_ref, "per-orientation plaquette count must match by symmetry"
             gather.append(g_c)
             mask.append(m_c)
             out.append(o_c)

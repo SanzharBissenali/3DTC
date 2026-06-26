@@ -51,7 +51,12 @@ class ThreeD_ToricCodeGeometry:
         
         # Generate stabilizers
         self.vertex_all = self._generate_stabilizer_vert()
-        self.plaq_all = self._generate_stabilizer_plaqs()
+        # plaq_all is parallel to plaq_centers (geometric centre) and plaq_orient
+        # (normal axis c); _build_plaq_index() turns the centres into a
+        # coordinate->index map the geometry-exact CNN gathers against.
+        self.plaq_all, self.plaq_centers, self.plaq_orient = \
+            self._generate_stabilizer_plaqs()
+        self._build_plaq_index()
         
         # Generate nearest-neighbor bonds
         self.bonds = self._generate_bonds()
@@ -155,9 +160,21 @@ class ThreeD_ToricCodeGeometry:
         return [[self._mapping3Dto1D(neighbors[i, k]) for i in range(6)]
         for k in range(neighbors.shape[1])]
     
-    def _generate_stabilizer_plaqs(self) -> List[List[int]]:
+    def _generate_stabilizer_plaqs(self):
+        """Plaquette (B_p) stabilizers, parallel with their centres and normals.
+
+        Returns (plaq_all, plaq_centers, plaq_orient):
+            plaq_all[p]     -> 4 edge qubit indices of plaquette p,
+            plaq_centers[p] -> its geometric centre (np.array, length 3),
+            plaq_orient[p]  -> its normal axis c in {0,1,2}.
+
+        PBC: every face is complete (modulo wrapping) -> 3·Lx·Ly·Lz plaquettes.
+        OBC: a boundary face with a missing edge is **dropped** — only complete
+        4-edge faces are kept, so plaq_all carries no -1 padding (which would
+        otherwise corrupt the ED Z-strings and the Wilson product in the CNN).
+        """
         L = (self.Lx, self.Ly, self.Lz)
-        plaq_all = []
+        plaq_all, plaq_centers, plaq_orient = [], [], []
         # iterate over the 3 plane orientations: c is the normal axis
         for c in range(3):
             a, b = [i for i in range(3) if i != c]
@@ -177,8 +194,35 @@ class ThreeD_ToricCodeGeometry:
                             if self.bc == "PBC":
                                 coord = coord % np.array(L)
                             edges.append(self._mapping3Dto1D(coord))
+                        if self.bc == "OBC" and -1 in edges:
+                            continue  # incomplete boundary face -> not a stabilizer
                         plaq_all.append(edges)
-        return plaq_all
+                        plaq_centers.append(center)
+                        plaq_orient.append(c)
+        return plaq_all, plaq_centers, plaq_orient
+
+    def _build_plaq_index(self):
+        """Map a plaquette centre to its index in plaq_all (2x-integer keys).
+
+        Centres are unique across orientations (the two half-integer coordinates
+        identify the normal axis), so the centre alone keys the plaquette. Used by
+        KernelManager3D to gather neighbouring plaquettes by coordinate under both
+        boundary conditions.
+        """
+        self._plaq_to_idx = {tuple((2 * np.asarray(c)).round().astype(int)): i
+                             for i, c in enumerate(self.plaq_centers)}
+
+    def _plaq_center_to_idx(self, center: np.ndarray) -> int:
+        """Plaquette index at geometric centre `center`. Returns -1 if not found.
+
+        PBC wraps the centre into the cell before lookup (2x-integer keys, mod
+        2L per axis); OBC does no wrapping so out-of-box centres return -1.
+        """
+        c = np.asarray(center, dtype=float)
+        key = (2 * c).round().astype(int)
+        if self.bc == "PBC":
+            key = key % (2 * np.array([self.Lx, self.Ly, self.Lz]))
+        return self._plaq_to_idx.get(tuple(key.astype(int)), -1)
 
     def _generate_bonds(self) -> List[List[int]]:
         bonds = []

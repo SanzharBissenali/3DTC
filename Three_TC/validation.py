@@ -217,13 +217,14 @@ def nqs_metrics(vs, Ham, geo, ref: Dict[str, float], xz_stabs=None) -> Dict[str,
 
 def train_one(config: Dict[str, Any], hz: float, ref: Dict[str, float],
               *, fermionic: bool = False, hx: float = 0.2, L: int = 2,
+              bc: str = "PBC",
               n_iter: int = 100, dt: float = 0.02, diag_shift: float = 2e-3,
               n_samples: int = 4096, n_chains: int = 16, n_discard: int = 8,
               seed: int = 0) -> Dict[str, Any]:
     """Build (via shared builders), train (via shared run_loop), and score one
     architecture at one h_z regime against `ref`."""
     run_cfg = {
-        "L": L, "bc": "PBC", "model": "fermionic" if fermionic else "bosonic",
+        "L": L, "bc": bc, "model": "fermionic" if fermionic else "bosonic",
         "hx": hx, "hy": 0.0, "hz": hz, "J": 1.0,
         "arch": config["arch"], "hidden": config.get("hidden", 8),
         "n_samples": n_samples, "n_chains": n_chains, "n_discard": n_discard,
