@@ -5,6 +5,42 @@ checkpoints record discrete milestones; the most recent is at the top.
 
 ---
 
+## Checkpoint 5 — Scaling the bosonic NQS past L=2 (no exact reference)
+
+The L=2 architecture comparison is settled: the **symmetry-aware `ToricCNN_full`
+reaches a relative energy error ~100× lower** than the symmetry-unaware pure CNN
+(`GeoCNN`, no-Wilson control at matched params). Goal now: **scale to L≥3** and show
+training is stable and the two architectures converge to **distinguishable energies**.
+
+### What scales for free (verified by review + cheap proxy)
+
+- `Three_TC/builders.py` + `train.py` carry **no L=2 hardcoding** in the
+  VMC/sampler/model path. Network params are **L-independent** (site-shared weights):
+  `ToricCNN_full`=2571, `GeoCNN`=1839 at **both** L=2 and L=3. Sampler `n_sweeps`
+  auto-scales to `2N`; dense QGT stays cheap (~2.6k params).
+- Smoke (no ED): both archs `build_state` + `expect(H)` at L=3 PBC (N=81). VMC at
+  L=3/4 is laptop-fine (Checkpoint 1 ran L=4 h=0). **The 8 GB OOM rule is ED-only.**
+
+### What does NOT scale — the exact reference (now guarded in the notebook)
+
+ED is tractable only at **L=2** (PBC N=24 / OBC N=12). At L≥3 the Hilbert space
+explodes (PBC 2⁸¹, OBC 2⁵⁴) ⇒ no `E_exact`. `nqs_sweep_colab_exp.ipynb` configure
+cell now sets `HAS_GROUND_TRUTH = (L==2)`:
+
+- **L=2** keeps the exact path: `--hz_preset` (PBC) or on-the-fly `eigsh` ED (OBC).
+- **L≥3** passes `--hz` directly, **no `--exact_E0`** → `delta=None` (handled at
+  `train.py:124`); runs are compared by **final variational energy** (lower wins).
+- `N_SWEEPS=0` ⇒ code default `2N`. Intro markdown documents the L-scaling regime.
+- `HZ_PRESETS` (`train.py:54`) are L=2-only — they must not be used at L>2.
+
+### Next
+
+On Colab, A/B `ToricCNN_full` vs `GeoCNN` at L=3 PBC (matched params via the
+param-count helper, same hx,hz): confirm `R̂≈1` / shrinking `√Var` and a clear
+energy gap. Expect to **raise `diag_shift`** for the larger SR solve.
+
+---
+
 ## Checkpoint 4 — OBC enabled for the symmetry-aware CNN (bosonic, L=2)
 
 OBC is now a first-class boundary condition via the existing `--bc OBC` flag (no new

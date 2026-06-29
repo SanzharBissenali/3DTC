@@ -83,3 +83,23 @@ suspects were GPU VRAM preallocation across back-to-back subprocesses (mitigated
 `XLA_PYTHON_CLIENT_PREALLOCATE=false` + `ALLOCATOR=platform`) and swallowed nonzero
 exits (now checked). The actual skip cause was the missing `--qgt dense` (issue #1).
 Revisit only if re-automating the sweep.
+
+## 6. GPU OOM at L≥3 — set `--chunk_size` (it is NOT ED)  ← 2026-06-29
+
+Symptom: `RESOURCE_EXHAUSTED: Failed to allocate ... 117.78GiB` with a traceback
+through `expect_and_grad → expect_and_forces → forces_expect_hermitian`. Easy to
+misread as ED, but **no ED is on this path** (eigsh only runs in the OBC-L=2
+configure cell). It's the **local-energy + gradient** step: `E_loc(s)` evaluates the
+net on every connected config, and at L=3 PBC there are ≈108 off-diagonal terms per
+sample (27 `A_v` 6-flips + 81 `h_x` 1-flips). `expect_and_grad` backprops through the
+whole `n_samples × connected` batch at once; the GeoConv3D activations
+`(batch, C, 3, L³, S=15)` blow up to ~110 GiB. L=2 fit only because both the
+connected count and the feature maps were ~3× smaller.
+
+**Lever.** `--chunk_size` (plumbed `train.py` → `MCState(chunk_size=...)`; defaults
+to None = no chunking). It splits the sample batch so peak memory ≈ linear in the
+chunk. `chunk_size=1024` at `n_samples=16384` lands ~16 GiB (fits an L4); the
+rematerialization log's "~110 GiB at full batch" sets the scale (target ≈
+`n_samples × 16/110`). Lower if still OOM. The notebook exposes a `CHUNK` knob
+(default 1024) threaded as `CHUNK_FLAG` into every run cell. Chunking does not change
+results — same gradient, just computed in slices.

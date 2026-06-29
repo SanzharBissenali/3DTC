@@ -12,8 +12,13 @@ place. The active goal is now to **map out the 3D toric-code phase diagram**
 starting from faithfully reproducing **bosonic TC at L=2** before scaling up and
 moving to the sign-full fermionic TC.
 
-**Immediate goal:** find the architecture + training + sampling hyperparameters
-that closely reproduce bTC at L=2 (validated against exact diagonalisation).
+**Immediate goal (updated 2026-06-29):** the L=2 architecture comparison is done
+— the symmetry-aware `ToricCNN_full` reaches a relative energy error **~100×
+lower** than the symmetry-unaware pure-CNN (`GeoCNN`) baseline. Now **scale to
+larger L** (L≥3 PBC), where exact diagonalisation is no longer available, and
+show that (i) training stays **stable** and (ii) the symmetry-aware and
+symmetry-unaware nets **converge to distinguishable energies** (the gap is the
+order parameter once `delta` is gone).
 
 ## Work done so far
 
@@ -120,6 +125,36 @@ Analysis only (no code yet), ahead of program step 3 (fermionic phase diagram).
   complex backbone, consider a separate phase head. (3) Add B̃_p 2-edge-flip moves
   to `E_loc`/sampler. (4) Validate on FM ratio + gap + ⟨Mz⟩ vs ED (L=2 local; L≥3
   Colab only).
+
+### 2026-06-29 — Scaling the bosonic NQS past L=2 (no exact reference)
+
+- **L=2 result (user-reported, recorded here):** symmetry-aware `ToricCNN_full`
+  achieves a relative energy error **~100× lower** than the symmetry-unaware pure
+  CNN stack (`GeoCNN`, the no-Wilson control at matched params/depth). This is the
+  payoff of the A_v-invariant Wilson change-of-coordinates. → **scale up.**
+- **What we want to observe at L≥3:** (1) training is **stable** (R̂≈1, spread
+  `√Var` shrinking, energy converging — *not* `mcmc_acceptance`, which is
+  phase-dependent, see [[mcmc-acceptance-phase-dependent]]); (2) the symmetry-aware
+  and symmetry-unaware nets **converge to different energies** (lower = better by
+  the variational principle; the gap replaces `delta` as the figure of merit).
+- **Reviewed the pipeline for L-scaling — the stack scales with just `--L`.**
+  `Three_TC/builders.py` and `train.py` are clean: params are **L-independent**
+  (weights shared across sites — verified `ToricCNN_full`=2571, `GeoCNN`=1839 at
+  both L=2 and L=3), the sampler `n_sweeps` auto-scales to `2N`, dense QGT stays
+  cheap. VMC at L=3/4 is fine on a laptop (Checkpoint 1 ran L=4 h=0); the 8 GB OOM
+  rule is about **ED**, not VMC. Cheap-proxy smoke: both archs build + `expect(H)`
+  at L=3 PBC (N=81).
+- **The only L=2-specific machinery is the exact reference**, and it's now guarded
+  in `nqs_sweep_colab_exp.ipynb`: ED is tractable only at L=2 (PBC N=24 / OBC N=12);
+  at L≥3 (PBC 2⁸¹, OBC 2⁵⁴) there is no `E_exact`. The configure cell sets
+  `HAS_GROUND_TRUTH = (L==2)` — L=2 keeps the `--hz_preset` (PBC) / on-the-fly ED
+  (OBC) path; **L≥3 passes `--hz` directly with no `--exact_E0`**, so `train.py`
+  prints `E ± ΔE` + spread and `delta=None` (handled gracefully, `train.py:124`).
+  Also: `N_SWEEPS=0` → code-default `2N`; intro markdown documents the regime.
+  `HZ_PRESETS` (`train.py:54`) stays L=2-only; do **not** use it at L>2.
+- **Next:** on Colab, A/B `ToricCNN_full` vs `GeoCNN` at L=3 PBC, matched params
+  (use the param-count helper cell), same (hx,hz); confirm stable training and a
+  clear energy gap. Likely **raise `diag_shift`** for the larger SR solve.
 
 ---
 
