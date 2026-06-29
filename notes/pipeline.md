@@ -158,6 +158,72 @@ because the decoration leaves A_v untouched.
 
 ---
 
+## 6b. Phase-transition detection from trained NQS (`Three_TC/fm.py`)
+
+Given a grid of **already-trained, converged** NQS checkpoints (the `train.py`
+artifact pair `{name}.mpack` + `{name}.json`) at one fixed `L`, sweeping `hz`
+(or `hx`), locate the topological→trivial transition via the Fredenhagen–Marcu
+(BFFM) order parameter.
+
+```
+checkpoints {name}.mpack + {name}.json   (one per (L, hx, hz))
+   │ load_vstate : build_state(config) + flax.from_bytes(mpack)
+   ▼ sector_operators(geo, hi, sector) → (open_op, closed_op)
+   ▼ fm_ratio(vs, …)  →  O_FM = ⟨S_open⟩/√|⟨W_closed⟩|  ± propagated err
+fm_sweep(dir, sector, L, hx, field="hz")  → table  field, O_FM±err, ⟨σz⟩±err
+   ▼ fit_transition  →  h_c = logistic inflection  (= derivative peak),
+   ▼                    finite-difference dO/dh peak as model-free cross-check
+plot_fm_sweep(...)   (matplotlib)        # index results by L; stack L → FSS later
+```
+
+**The 3D e/m duality is not symmetric — two sectors, one shared consumer:**
+| sector | field | operator | open / closed | cost |
+|---|---|---|---|---|
+| `electric` | `hz` | σ^z **loop** in a lattice plane (the 2D BFFM embedded in 3D) | **half-square** string (2R edges) / 4-sided rectangle (4R) | diagonal ⇒ cheap, low variance |
+| `magnetic` | `hx` | σ^x **membrane** (axis-edges in a dual plane; boundary = flux loop) | **half-sheet** (flux loop = the cut) / full box-spanning sheet | off-diagonal ⇒ noisier, needs more samples |
+
+`fm_ratio`, `load_vstate`, `fm_sweep`, `fit_transition`, `plot_fm_sweep` are
+shared; only the edge-set builder differs (`electric_loop_edges` vs
+`magnetic_membrane_edges`).
+
+**Physics.** `O_FM` divides out the perimeter law, so it stays ≈0 in the
+topological/deconfined phase and rises to O(1) once the matter condenses (e at
+large `hz`, m at large `hx`); `dO_FM/dh` peaks at the pseudo-critical `h_c(L)`.
+The cheap diagonal `⟨σz⟩` (whose susceptibility peaks at the same place — the
+locator already used in §5) is returned alongside as a cross-check.
+
+**ℓ→∞ limit.** The order parameter is defined at infinite string length. On a
+finite OBC box we take it as the **largest loop the lattice holds**: the open
+string is the BFFM half-square (2R edges = ½ the 4R perimeter, the cancellation
+that makes the ratio finite), and `R` defaults to `min(in-plane extent) − 1`. We
+do **not** R-sweep — biggest available loop only.
+
+**Caveat (single L).** One `L` gives a *crossover*; `h_c(L)` drifts. The current
+deliverable is the per-L estimate (sigmoid fit + derivative peak); the rigorous
+transition point is the finite-size extrapolation over the per-L `h_c` (FM curves
+also *cross* across L). The table is indexed by `L` so FSS is a downstream step,
+not a rewrite.
+
+**Validated (cheap proxies, no ED).** GF(2) index identities checked for OBC and
+PBC at L=3: electric closed loop = XOR of the enclosed `B_p`; open string flips
+exactly 2 `A_v` (the two e-charges); magnetic **closed sheet** is boundary-free
+(commutes with every `B_p`; = ∏A_v over the slab ⇒ =1 on the GS); its **half-sheet**
+opens a flux loop along the cut (area = ½ the full sheet).
+Operator build / `fm_ratio` / checkpoint round-trip / logistic fit smoke-tested
+on tiny untrained states.
+
+Driver (Colab, where the checkpoints live — never run 3D locally):
+```python
+from Three_TC import fm
+tab = fm.fm_sweep("outputs/sweep_L3", sector="electric", field="hz",
+                  L=3, hx=0.2, model="bosonic", bc="PBC", eval_samples=8192)
+fit = fm.fit_transition(tab["field"], tab["O"], tab["Oe"])
+fm.plot_fm_sweep(tab["field"], tab["O"], tab["Oe"], fit, sector="electric", L=3)
+print("h_c(L=3) =", fit["h_c"], "±", fit["h_c_err"])
+```
+
+---
+
 ## 7. How to extend
 
 - **New architecture:** add a branch in `build_model`; it must take a flat
