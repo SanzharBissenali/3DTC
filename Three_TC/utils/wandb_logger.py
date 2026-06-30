@@ -40,11 +40,18 @@ def init_run(
     name: Optional[str] = None,
     tags: Optional[list] = None,
     group: Optional[str] = None,
+    id: Optional[str] = None,
+    resume: Optional[str] = None,
 ):
     """Initialize a wandb run. Returns the run object.
 
     `group` ties all runs of a sweep together (one wandb group) so they can be
     compared/plotted side by side — pass the SLURM job name for an array sweep.
+
+    `id`/`resume` make a requeued (timed-out) job continue the *same* wandb run
+    instead of opening a new one: pass a deterministic `id` (e.g. a hash of the
+    run name) with `resume="allow"`. Works in offline mode too — the resumed
+    chunk merges into the same run on `wandb sync`.
     """
     import os
 
@@ -64,6 +71,8 @@ def init_run(
         name=name,
         tags=tags,
         group=group,
+        id=id,
+        resume=resume,
         reinit=True,
     )
 

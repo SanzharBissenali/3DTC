@@ -13,12 +13,13 @@ design), so you only list the knobs you're actually sweeping.
 | Hamiltonian | `--hx --hy --hz --J` | fields + coupling |
 | | `--hz_preset` | `hard`\|`mid`\|`easy` — sets `hz` AND exact `E0` (delta FOM) |
 | | `--exact_E0` | manual `E_exact` at a custom `hz` (alt to preset) |
-| Architecture | `--arch` | `ToricCNN` \| `ToricCNN_full` \| `VanillaCNN` \| `VanillaWilsonCNN` |
+| Architecture | `--arch` | `ToricCNN` \| `ToricCNN_full` \| `ToricCNN_gridinv` \| `GeoCNN` \| `VanillaCNN` \| `VanillaWilsonCNN` |
 | | `--hidden` | `ToricCNN`: invariant hidden width |
-| | `--noninv_channels` | `ToricCNN_full`/`VanillaWilsonCNN`: noninv channels |
-| | `--n_noninv` | `ToricCNN_full`/`VanillaWilsonCNN`: # noninv layers |
+| | `--noninv_channels` | `ToricCNN_full`/`ToricCNN_gridinv`/`VanillaWilsonCNN`: noninv channels |
+| | `--n_noninv` | `ToricCNN_full`/`ToricCNN_gridinv`/`VanillaWilsonCNN`: # noninv layers |
 | | `--inv_hidden` | post-Wilson hidden widths, e.g. `--inv_hidden 4 4` (final 1-ch appended) |
-| | `--kernel_size` | `VanillaCNN`/`VanillaWilsonCNN` conv kernel |
+| | `--kernel_size` | `VanillaCNN`/`VanillaWilsonCNN` conv kernel; `ToricCNN_gridinv` invariant grid-conv kernel (default auto = L) |
+| | `--cnn_hidden` | `GeoCNN`: edge-conv channel widths (no Wilson), final 1-ch appended |
 | | `--vanilla_depth` | `VanillaCNN` only: # hidden conv layers |
 | | `--noninv_random` | `VanillaWilsonCNN`: random-init noninv (default = identity warm start) |
 | Training | `--n_iter` | # VMC/SR steps |
@@ -35,6 +36,9 @@ design), so you only list the knobs you're actually sweeping.
 | Output | `--name --out_dir` | auto name = `{model}_{arch}_L{L}_hx{hx}_hz{hz}` |
 | | `--wandb_project --wandb_entity --wandb_group` | W&B routing |
 | | `--no_wandb` | disable W&B |
+| | `--wandb_offline` | log W&B to a local dir (`WANDB_MODE=offline`); `wandb sync` later — for compute nodes with no network |
+| Checkpoint | `--checkpoint_every N` | atomically write weights + energy curve every N steps (default 10; 0 disables) — timeout-safe |
+| | `--resume` | continue from `{out_dir}/{name}.ckpt.mpack` + `.curve.json` if present (resumes LR schedule + curve); re-run the same command to keep going |
 
 ## Colab cell template (every knob as a variable)
 
@@ -51,7 +55,7 @@ HZ_PRESET    = None           # None | "hard"|"mid"|"easy"
 EXACT_E0     = None
 
 # ---- architecture ----
-ARCH         = "ToricCNN_full"   # ToricCNN | ToricCNN_full | VanillaCNN | VanillaWilsonCNN
+ARCH         = "ToricCNN_full"   # ToricCNN | ToricCNN_full | ToricCNN_gridinv | GeoCNN | VanillaCNN | VanillaWilsonCNN
 NONINV_CH    = 4
 N_NONINV     = 2
 INV_HIDDEN   = [4, 4]
@@ -100,8 +104,21 @@ flags += f" --wandb_group {WANDB_GROUP}" if WANDB else " --no_wandb"
 - Don't mix `--hz` and `--hz_preset` — the preset overrides `hz` and also sets
   `exact_E0`.
 - `--inv_hidden 4 4` → invariant block `[4, 4, 1]`; `--inv_hidden` empty → `[1]`.
+  Holds for both `ToricCNN_full` (geometry-exact invariant convs) and
+  `ToricCNN_gridinv` (standard grid `nn.Conv3D` invariant block) — only the conv
+  *type* differs; the trailing width-1 readout is appended either way.
+- `ToricCNN_gridinv`: `--kernel_size` is the invariant grid-conv kernel; omit it for
+  the default **auto = L** (full span, the topological-coverage choice). PBC uses
+  CIRCULAR padding, OBC zero (`SAME`) padding + a masked readout — supports both BC.
 - Keep `n_samples / n_chains` ≳ a few hundred per chain so `R_hat` / `tau_corr`
   are meaningful (e.g. 8192 samples / 512 chains = only 16 per chain — too few).
 - For **slowing symmetry breaking**, `diag_shift` goes **up** (more conservative
   SR steps), not down. The 2D paper's tiny `5e-5` only worked because 2D sampling
   never stalled.
+- **Cluster / timeout-safety:** the run writes `{name}.ckpt.mpack` (weights +
+  sampler RNG) and `{name}.curve.json` (step count + full curve) every
+  `--checkpoint_every` steps; `--resume` reloads them and continues. A requeued
+  job reuses a deterministic wandb id, so offline chunks merge into one run on
+  `wandb sync`. Tail `{name}.curve.json` to monitor a run with no network. The
+  NERSC wrapper is `nersc/submit_nqs_gridinv.sh` (env-var knobs + `AUTO_RESUBMIT`
+  for multi-slot runs).

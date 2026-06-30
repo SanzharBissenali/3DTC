@@ -206,6 +206,35 @@ correlations* without ever breaking symmetry. Weights `W[0,…]` are shared acro
 27 x-normal plaquettes; `W[1]`,`W[2]` are independent stencils for y,z normals —
 that per-orientation sharing is the 3-sublattice structure.
 
+### Grid-conv invariant alternative (`ToricCNN_gridinv`, `networks.py:621`)
+
+The geometry-exact `GeoConv3D(lattice="plaq")` above carries an **`O=3` orientation
+axis** in its weights `W[o,c_out,c_in,s]` (independent stencils per face-normal) and
+grows its footprint by adding 15-tap taps. To reach the topological long-range order
+the receptive field must span the system (`Θ(L)`), which with the geometry-exact
+stencil means either many layers or a hand-grown bowl — and the `O=3`×`S` cost.
+
+`ToricCNN_gridinv` is the **2D-paper architecture generalised the obvious way**: after
+the per-channel Wilson product it **folds the flux field onto the cube-cell grid** and
+runs a *standard* `nn.Conv3D` with kernel scaled toward `L`.
+
+- **The fold** (`plaq_grid_layout`, `networks.py`): each plaquette (centre
+  `corner + ½ê_a + ½ê_b`, normal `o`) is anchored to cell `floor(centre)` and placed
+  in orientation-channel `o` → a dense `(L,L,L,3·C)` tensor + an occupancy mask. This
+  is the 2D "plaquettes live on the dual-lattice vertices" picture, except a 3D cell
+  carries up to **3** plaquettes (one per normal), folded into channels. The
+  within-cell ½-offsets between the three normals collapse onto the same vertex — the
+  **half-offset approximation** that `GeoConv3D` avoids.
+- **The conv**: `nn.Conv3D(features=w·O, kernel_size=L)` (override `--kernel_size`),
+  `padding="CIRCULAR"` for PBC, zero (`"SAME"`) for OBC. Kernel `→ L` spans the lattice
+  in one layer; the orientation mixing is now ordinary `3C→3C` channel mixing.
+- **Readout**: final conv → `O` channels (width-1 per orientation), then a
+  **masked mean** over occupied cells (OBC boundary cells excluded) → real `log ψ`.
+- **Tradeoff**: not geometry-exact (the half-offset is dropped), but a fast,
+  well-optimised conv with trivial kernel-to-`L` scaling. Still translation-equivariant
+  on the cube grid; the pre-Wilson (noninv) block stays geometry-exact (small kernel).
+  A/B it against `ToricCNN_full` (geometry-exact invariant block) at matched depth.
+
 ## 2D vs 3D — what actually differs
 
 | | 2D (`model/networks.py`) | 3D (`Three_TC/model/networks.py`) |

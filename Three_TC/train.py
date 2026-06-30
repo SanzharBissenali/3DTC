@@ -37,7 +37,7 @@ from Three_TC.builders import build_state, run_loop, with_defaults
 from Three_TC.validation import nqs_observables
 from Three_TC.utils.wandb_logger import init_run, log_step, finish_run
 from utils.config import setup_environment
-from utils.io import save_model
+from utils.io import save_model, load_weights
 
 
 TRAIN_DEFAULTS: Dict[str, Any] = {
@@ -46,6 +46,11 @@ TRAIN_DEFAULTS: Dict[str, Any] = {
     "wandb_project": "approx-sym-3D-TC",
     "wandb_entity": "models-california-institute-of-technology-caltech",
     "tags": None, "name": None,
+    # Cluster/timeout robustness: checkpoint the weights + energy curve to disk
+    # every `checkpoint_every` steps (0 disables) so a killed job keeps its
+    # progress; `--resume` continues from the last checkpoint; `wandb_offline`
+    # logs to a local dir (NERSC compute nodes have no outbound network).
+    "checkpoint_every": 10, "resume": False, "wandb_offline": False,
 }
 
 # Hardcoded reference points from threed_bosonic.json (L=2 PBC bosonic, hx=0.2,
@@ -98,6 +103,14 @@ def train(config: Dict[str, Any]) -> Dict[str, Any]:
     name = _run_name(cfg)
     cfg["name"] = name
     os.makedirs(cfg["out_dir"], exist_ok=True)
+    weights_base = os.path.join(cfg["out_dir"], name)
+    ckpt_base    = f"{weights_base}.ckpt"          # periodic weights checkpoint
+    curve_path   = f"{weights_base}.curve.json"    # live energy curve + step count
+
+    # NERSC compute nodes have no outbound network -> log W&B to a local dir and
+    # `wandb sync` later from a login node. Must be set before wandb is imported.
+    if cfg.get("wandb_offline"):
+        os.environ["WANDB_MODE"] = "offline"
 
     geo, hi, Ham, vs, xz_stabs = build_state(cfg)
     # Resolved run metadata -> W&B config (and saved JSON): the param count and the
@@ -109,13 +122,42 @@ def train(config: Dict[str, Any]) -> Dict[str, Any]:
           f"  n_chains={cfg['n_chains']}  n_sweeps={cfg['n_sweeps']}"
           + (f"  E_exact={exact_E0}" if exact_E0 is not None else ""))
 
+    curve = {"step": [], "energy": [], "energy_err": [], "energy_spread": [], "delta": []}
+
+    # --- resume a timed-out run from the last on-disk checkpoint ---------------
+    # The checkpoint is {name}.ckpt.mpack (weights + sampler RNG) + {name}.curve.json
+    # (completed step count + the energy history so far). We reload both, continue
+    # the cosine-LR schedule from `start_step`, and append to the existing curve.
+    start_step = 0
+    if cfg.get("resume") and os.path.exists(curve_path):
+        with open(curve_path) as f:
+            ck = json.load(f)
+        start_step = int(ck.get("completed_steps", 0))
+        curve = ck.get("curve", curve)
+        if os.path.exists(f"{ckpt_base}.mpack"):
+            vs = load_weights(vs, ckpt_base)
+        print(f"[train] resuming '{name}' from step {start_step}/{cfg['n_iter']}"
+              f"  (loaded {len(curve['step'])} curve points)", flush=True)
+
     run = None
     if cfg["wandb"]:
+        import hashlib
+        wandb_id = hashlib.md5(name.encode()).hexdigest()[:12]  # stable across requeues
         run = init_run(project=cfg["wandb_project"], entity=cfg["wandb_entity"],
                        config=cfg, name=name, group=cfg.get("wandb_group"),
-                       tags=cfg["tags"] or [cfg["model"], cfg["arch"], f"L={cfg['L']}"])
+                       tags=cfg["tags"] or [cfg["model"], cfg["arch"], f"L={cfg['L']}"],
+                       id=wandb_id, resume="allow")
 
-    curve = {"step": [], "energy": [], "energy_err": [], "energy_spread": [], "delta": []}
+    ckpt_every = int(cfg.get("checkpoint_every", 0) or 0)
+
+    def _write_checkpoint(step):
+        """Persist weights + the energy curve so a kill/timeout loses nothing."""
+        save_model(vs, ckpt_base, verbose=False)
+        tmp = curve_path + ".tmp"                      # atomic: never a half-written file
+        with open(tmp, "w") as f:
+            json.dump({"completed_steps": step, "name": name, "config": cfg,
+                       "curve": curve}, f)
+        os.replace(tmp, curve_path)
 
     def on_step(step, E, vs):
         e   = float(np.real(E.mean))
@@ -134,11 +176,18 @@ def train(config: Dict[str, Any]) -> Dict[str, Any]:
         print(msg, flush=True)
         if run is not None:
             log_step(run, step, E, vs, exact_E0=exact_E0)
+        if ckpt_every and ((step + 1) % ckpt_every == 0):
+            _write_checkpoint(step + 1)
 
     t0 = time.time()
-    run_loop(vs, Ham, n_iter=cfg["n_iter"], dt=cfg["dt"],
-             diag_shift=cfg["diag_shift"], on_step=on_step, lr_min=cfg["lr_min"],
-             qgt=cfg.get("qgt", "auto"))
+    remaining = max(0, cfg["n_iter"] - start_step)
+    if remaining > 0:                                  # 0 only if a resume is already complete
+        run_loop(vs, Ham, n_iter=remaining, dt=cfg["dt"],
+                 diag_shift=cfg["diag_shift"], on_step=on_step, lr_min=cfg["lr_min"],
+                 qgt=cfg.get("qgt", "auto"), start_step=start_step,
+                 total_iter=cfg["n_iter"])
+    else:
+        print(f"[train] '{name}' already complete at {start_step} steps; finalizing.")
     runtime_s = time.time() - t0
 
     obs = nqs_observables(vs, Ham, geo, xz_stabs=xz_stabs)
@@ -257,6 +306,17 @@ def _parse_args() -> Dict[str, Any]:
                    help="wandb group tying a sweep's runs together for comparison "
                         "(e.g. the SLURM job name)")
     p.add_argument("--no_wandb", action="store_true", help="disable W&B logging")
+    p.add_argument("--wandb_offline", action="store_true",
+                   help="log W&B to a local dir (WANDB_MODE=offline) for compute "
+                        "nodes with no network; `wandb sync` it later from a login node")
+    # Checkpoint / resume (cluster timeout robustness)
+    p.add_argument("--checkpoint_every", type=int, default=D,
+                   help="write weights + energy curve to disk every N steps "
+                        "(default 10; 0 disables) so a timed-out job keeps its progress")
+    p.add_argument("--resume", action="store_true",
+                   help="continue from {out_dir}/{name}.ckpt.mpack + .curve.json if "
+                        "present (resumes the LR schedule and appends to the curve); "
+                        "re-submit the SAME command to keep going after a timeout")
 
     cfg = vars(p.parse_args())
     # --no_wandb only forces wandb off; otherwise leave it to TRAIN_DEFAULTS.

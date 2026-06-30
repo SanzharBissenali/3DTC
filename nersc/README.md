@@ -110,6 +110,47 @@ rate, diag_shift, pre-Wilson capacity, post-Wilson width); array index → combo
 exactly like the ED sweep maps index → h_z. If compute nodes can't reach wandb,
 `export WANDB_MODE=offline` in the submit script and `wandb sync` later.
 
+## 4.6 Phase 5 — large-L gridinv run (checkpoint + resume)
+
+Phase 4 is an **L=2 grid array** that validates hyperparameters against ED. To
+push the **grid-conv architecture (`ToricCNN_gridinv`) to larger L**, where one
+run can outlast a single queue slot, use `nersc/submit_nqs_gridinv.sh`: a single
+long job whose every knob is an env var, with on-disk checkpointing so a
+timeout/pre-emption loses nothing.
+
+```bash
+# one config; override any knob via env vars (defaults in the script header)
+L=4 BC=OBC DT=0.01 DIAG_SHIFT=1e-3 N_NONINV=2 NONINV=4 INV="4 4" KERNEL=4 \
+    N_ITER=400 sbatch nersc/submit_nqs_gridinv.sh
+
+# unattended multi-slot run: auto-resubmits ~3 min before each wall limit
+L=6 N_ITER=800 AUTO_RESUBMIT=1 sbatch nersc/submit_nqs_gridinv.sh
+```
+
+How the timeout-safety works (all in `Three_TC/train.py`):
+
+- `--checkpoint_every N` (default 10) atomically writes `{name}.ckpt.mpack`
+  (weights **+ sampler RNG state**) and `{name}.curve.json` (completed step count
+  + the full energy/error/delta curve) to `$PSCRATCH` every N steps. **Tail
+  `{name}.curve.json` to watch progress live**, even with wandb offline.
+- `--resume` (always passed by the script) reloads that checkpoint, continues the
+  cosine-LR schedule from the right step, and appends to the curve. It is a no-op
+  on the first run, so **re-`sbatch`-ing the same command always Just Continues**.
+- `AUTO_RESUBMIT=1` traps Slurm's pre-timeout `USR1` signal and resubmits the job
+  (bounded by `MAX_RESUBMITS`, default 8); the `$PSCRATCH` checkpoint is the
+  hand-off. Leave it off to resubmit by hand.
+
+**wandb from compute nodes:** Perlmutter compute nodes usually can't reach
+wandb.ai, so the script passes `--wandb_offline` (logs to `$OUT_DIR/wandb/`).
+After the run, from a **login** node: `wandb sync $OUT_DIR/wandb/offline-run-*`.
+A requeued job reuses a deterministic run id, so all chunks merge into **one**
+wandb run on sync. Set `WANDB_OFFLINE=0` if your project is reachable, or
+`NO_WANDB=1` to rely on the JSON curve alone.
+
+**Sanity anchor:** submit with `HX=0 HZ=0` and the energy must converge to the
+exact unperturbed `E0` (PBC `-4L³`, OBC `-(L³+3(L-1)²L)`; see
+`notes/progress_log.md`). This is the only exact reference at L>2.
+
 ## 5. Monitoring & control
 
 ```bash

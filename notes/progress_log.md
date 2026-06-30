@@ -5,6 +5,57 @@ checkpoints record discrete milestones; the most recent is at the top.
 
 ---
 
+## Reference — exact unperturbed (h=0) ground-state energies
+
+The unperturbed `H = −J·Σ A_v − J·Σ B_p` (J=1) is a commuting-stabiliser
+Hamiltonian: the ground state satisfies **every** term = +1, so
+**`E0 = −(#A_v + #B_p)`** exactly, at any L (BC only changes the counts). The
+degeneracy (8 on the 3-torus, etc.) does *not* change E0. This is the **only exact
+energy anchor at L>2** — train at h=0 and the net must hit these to machine precision.
+
+- **PBC:** `#A_v = L³`, `#B_p = 3L³` → **`E0 = −4L³`**.
+- **OBC** (complete-face plaquettes only, all L³ vertex stars kept):
+  `#A_v = L³`, `#B_p = 3(L−1)²L` → **`E0 = −(L³ + 3(L−1)²L)`**.
+
+| L | N (PBC) | E0 PBC | N (OBC) | E0 OBC |
+|---|---|---|---|---|
+| 2 | 24  | −32   | 12   | −14   |
+| 4 | 192 | −256  | 144  | −172  |
+| 6 | 648 | −864  | 540  | −666  |
+| 8 | 1536| −2048 | 1344 | −1688 |
+
+Verified: ED at L=2 gives exactly −32 (PBC) / −14 (OBC); counts from
+`ThreeD_ToricCodeGeometry(L,L,L,bc)` (`len(vertex_all)`, `len(plaq_all)`).
+
+---
+
+## Checkpoint 6 — `ToricCNN_gridinv`: grid-conv invariant block (kernel → L)
+
+The geometry-exact invariant conv reaches topological long-range order only by
+spanning `Θ(L)`, which is costly in 3D (plaquette stencil has an `O=3` orientation
+axis + 15-tap footprint per layer). Added **`ToricCNN_gridinv`**
+(`Three_TC/model/networks.py:621`) — the **2D-paper architecture generalised to 3D**:
+keep the Wilson sandwich, but make the *invariant* block a standard `nn.Conv3D` whose
+kernel scales to `L`.
+
+- After the per-channel Wilson product, `plaq_grid_layout` **folds** the flux field
+  onto the cube-cell grid — each plaquette → cell `floor(centre)`, normal → one of 3
+  channels, `(L,L,L,3·C)` + occupancy mask. This is the 2D "plaquettes on dual-lattice
+  vertices" picture; a 3D cell holds 3 plaquettes folded into channels, collapsing the
+  within-cell ½-offsets (**half-offset approximation** `GeoConv3D` avoids).
+- `nn.Conv3D(kernel_size=L)` (override `--kernel_size`), CIRCULAR pad (PBC) / zero pad
+  (OBC); final conv → `O` channels then a **masked mean** over occupied cells → real
+  `log ψ`. Both BC supported; pre-Wilson noninv block stays geometry-exact.
+- **Verified**: builds + forward + sampler at L=2 OBC (N=12, params 3543) and PBC;
+  **Colab confirmed training to the same ~1e-3→1e-5 `delta`** as `ToricCNN_full` at L=2
+  OBC. `nqs_sweep_colab_exp.ipynb` now defaults to it, with arch-named output folders
+  `outputs/gridinv/…` and `NONINV`/`INV`/`KERNEL` knobs. Docs: `nqs_architecture.md`,
+  `training_cli.md`, `log_and_plan.md`.
+- **Use:** the cheap path to `kernel ∝ L` coverage at L≥3; A/B vs `ToricCNN_full`
+  isolates half-offset exactness against plain-`nn.Conv3D` speed/scaling.
+
+---
+
 ## Checkpoint 5 — Scaling the bosonic NQS past L=2 (no exact reference)
 
 The L=2 architecture comparison is settled: the **symmetry-aware `ToricCNN_full`

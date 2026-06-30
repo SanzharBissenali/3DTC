@@ -156,6 +156,39 @@ Analysis only (no code yet), ahead of program step 3 (fermionic phase diagram).
   (use the param-count helper cell), same (hx,hz); confirm stable training and a
   clear energy gap. Likely **raise `diag_shift`** for the larger SR solve.
 
+### 2026-06-30 — `ToricCNN_gridinv`: grid-conv invariant block (kernel → L)
+
+The geometry-exact invariant conv (`GeoConv3D(lattice="plaq")`) reaches the
+topological long-range order only by spanning `Θ(L)` — expensive in 3D because the
+plaquette stencil carries an `O=3` orientation axis and a 15-tap footprint per layer.
+Added **`ToricCNN_gridinv`** (`Three_TC/model/networks.py:621`): the **2D-paper
+architecture generalised directly to 3D** — keep the Wilson sandwich, but make the
+*invariant* block a standard `nn.Conv3D` whose kernel scales to `L`.
+
+- **The fold** (`plaq_grid_layout`): after the per-channel Wilson product, each
+  plaquette is anchored to cube cell `floor(centre)` and placed in orientation-channel
+  `o` → dense `(L,L,L,3·C)` grid + occupancy mask. The 2D "plaquettes on dual-lattice
+  vertices" picture, except a 3D cell holds 3 plaquettes (one per normal) folded into
+  channels — collapsing the within-cell ½-offsets (the **half-offset approximation**
+  `GeoConv3D` avoids). Trades geometry-exactness for a fast conv + trivial kernel→L
+  scaling; pre-Wilson (noninv) block stays geometry-exact.
+- **Conv + readout**: `nn.Conv3D(kernel_size=L)` (override `--kernel_size`), CIRCULAR
+  pad (PBC) / zero pad (OBC); final conv → `O` channels then a **masked mean** over
+  occupied cells (OBC boundary cells excluded) → real `log ψ`. Supports both BC.
+- **Wired**: `builders.py` dispatch + `plaq_grid_layout`; `train.py` `--arch
+  ToricCNN_gridinv` and `--kernel_size` documented for it (`--noninv_channels /
+  --n_noninv / --inv_hidden` reused). See `notes/nqs_architecture.md`
+  ("Grid-conv invariant alternative") and `notes/training_cli.md`.
+- **Verified**: builds + forward + sampler at L=2 OBC (N=12, params 3543) and PBC
+  (N=24); **Colab confirmed it trains to the same ~1e-3→1e-5 `delta`** as
+  `ToricCNN_full` at L=2 OBC. `nqs_sweep_colab_exp.ipynb` now **defaults to
+  `ToricCNN_gridinv`**, routes runs to the arch-named folder
+  `outputs/gridinv/colab-<bc>-<point>/`, and exposes `NONINV`/`INV`/`KERNEL` knobs.
+- **Why it matters for scaling:** this is the cheap path to `kernel ∝ L` coverage in
+  3D. A/B `ToricCNN_gridinv` (grid invariant) vs `ToricCNN_full` (geometry-exact
+  invariant) isolates how much the half-offset exactness is worth vs. the speed/scaling
+  of a plain `nn.Conv3D`.
+
 ---
 
 

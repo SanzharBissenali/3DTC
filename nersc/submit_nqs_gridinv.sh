@@ -1,0 +1,103 @@
+#!/bin/bash
+# Large-L NQS run of the grid-conv invariant architecture (ToricCNN_gridinv) on a
+# single Perlmutter A100. Unlike submit_nqs_sweep.sh (an L=2 ED-validation grid
+# array), this is ONE long run whose every hyperparameter is an environment
+# variable, so you submit different configs without editing the file:
+#
+#   L=4 DT=0.01 DIAG_SHIFT=1e-3 N_NONINV=2 NONINV=4 INV="4 4" KERNEL=4 N_ITER=400 \
+#       sbatch nersc/submit_nqs_gridinv.sh
+#
+# Robustness to the queue wall clock is built in:
+#   * --checkpoint_every writes weights + the energy curve to $PSCRATCH every few
+#     steps, so a timed-out / pre-empted job never loses progress.
+#   * --resume is ALWAYS passed; it is a no-op on the first run (no checkpoint yet)
+#     and continues from the last checkpoint on every later run. So you can simply
+#     re-`sbatch` the same command to keep going.
+#   * AUTO_RESUBMIT=1 makes the job resubmit itself ~3 min before the wall limit
+#     (Slurm --signal), so an L=6/8 run spanning several queue slots finishes
+#     unattended. Bounded by MAX_RESUBMITS.
+#
+#SBATCH --job-name=tc-gridinv
+#SBATCH --account=m5340_g
+#SBATCH --qos=regular
+#SBATCH --constraint=gpu
+#SBATCH --gpus=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=32
+#SBATCH --time=12:00:00
+#SBATCH --signal=B:USR1@180          # USR1 to the batch script 180s before the limit
+#SBATCH --output=%x-%j.out
+set -euo pipefail
+
+module load conda
+conda activate tc-nqs                # built by setup_conda_gpu.sh
+
+REPO=$HOME/Approximate-Symmetries-TC   # <-- EDIT to where you cloned the repo
+cd "$REPO"
+
+# ---- hyperparameters (override any at submit time via env vars) --------------
+L="${L:-4}"                          # linear size; N = 3L³ (PBC) / 3L³-3L² (OBC)
+BC="${BC:-OBC}"
+HX="${HX:-0.0}"
+HZ="${HZ:-0.0}"                      # HX=HZ=0 -> exact E0 anchor (see exact-h0-energies note)
+DT="${DT:-0.02}"                     # initial learning rate
+LR_MIN="${LR_MIN:-0.002}"           # cosine-decay floor (== DT for constant lr)
+DIAG_SHIFT="${DIAG_SHIFT:-1e-3}"    # SR regularization (raise to slow symmetry breaking)
+NONINV="${NONINV:-4}"               # pre-Wilson edge channels
+N_NONINV="${N_NONINV:-2}"           # number of pre-Wilson (non-invariant) layers
+INV="${INV:-4 4}"                   # post-Wilson invariant grid-conv widths (space-sep)
+KERNEL="${KERNEL:-0}"               # invariant grid-conv kernel; 0 -> auto = L (full span)
+N_ITER="${N_ITER:-400}"
+N_SAMPLES="${N_SAMPLES:-16384}"
+N_CHAINS="${N_CHAINS:-1024}"        # A100 default; scale with N_SAMPLES (>= a few hundred/chain)
+QGT="${QGT:-dense}"                 # use dense on GPU
+CKPT_EVERY="${CKPT_EVERY:-10}"
+CHUNK="${CHUNK:-}"                   # set e.g. 4096 if a large-L forward pass OOMs the GPU
+
+OUT_DIR="${OUT_DIR:-$PSCRATCH/tc_nqs/gridinv}"
+NAME="${NAME:-gridinv_L${L}_${BC}_hx${HX}_hz${HZ}_n${N_NONINV}x${NONINV}_k${KERNEL}}"
+
+# Perlmutter compute nodes usually cannot reach wandb.ai -> log offline and
+# `wandb sync $OUT_DIR/wandb/offline-*` from a login node afterward. Set
+# WANDB_OFFLINE=0 if your project IS reachable, or NO_WANDB=1 to disable entirely.
+WB_FLAG="--wandb_offline"
+[ "${WANDB_OFFLINE:-1}" = "0" ] && WB_FLAG=""
+[ "${NO_WANDB:-0}" = "1" ]      && WB_FLAG="--no_wandb"
+
+KERNEL_FLAG=""; [ "$KERNEL" != "0" ] && KERNEL_FLAG="--kernel_size $KERNEL"
+CHUNK_FLAG="";  [ -n "$CHUNK" ]      && CHUNK_FLAG="--chunk_size $CHUNK"
+
+# ---- auto-resubmit just before the wall limit (opt-in) -----------------------
+RESUB_COUNT="${RESUB_COUNT:-0}"
+MAX_RESUBMITS="${MAX_RESUBMITS:-8}"
+requeue() {
+  if [ "${AUTO_RESUBMIT:-0}" = "1" ] && [ "$RESUB_COUNT" -lt "$MAX_RESUBMITS" ]; then
+    echo "[submit] wall limit near — resubmitting (resume #$((RESUB_COUNT+1)))"
+    # carry every knob forward; the checkpoint on $PSCRATCH is the hand-off
+    RESUB_COUNT=$((RESUB_COUNT+1)) L="$L" BC="$BC" HX="$HX" HZ="$HZ" DT="$DT" \
+      LR_MIN="$LR_MIN" DIAG_SHIFT="$DIAG_SHIFT" NONINV="$NONINV" N_NONINV="$N_NONINV" \
+      INV="$INV" KERNEL="$KERNEL" N_ITER="$N_ITER" N_SAMPLES="$N_SAMPLES" \
+      N_CHAINS="$N_CHAINS" QGT="$QGT" CKPT_EVERY="$CKPT_EVERY" CHUNK="$CHUNK" \
+      OUT_DIR="$OUT_DIR" NAME="$NAME" AUTO_RESUBMIT=1 MAX_RESUBMITS="$MAX_RESUBMITS" \
+      WANDB_OFFLINE="${WANDB_OFFLINE:-1}" NO_WANDB="${NO_WANDB:-0}" \
+      sbatch "$0"
+  fi
+  exit 0
+}
+trap requeue USR1
+
+echo "[submit] $NAME  L=$L $BC  hx=$HX hz=$HZ  noninv=${N_NONINV}x${NONINV} inv='$INV' k=$KERNEL"
+echo "[submit] dt=$DT lr_min=$LR_MIN diag_shift=$DIAG_SHIFT n_iter=$N_ITER  (resume #$RESUB_COUNT)"
+
+# `srun ... &` + `wait` so the trap fires promptly on USR1 (a foreground srun
+# would swallow the signal until it returns).
+srun -n 1 python -u -m Three_TC.train \
+  --L "$L" --bc "$BC" --model bosonic --arch ToricCNN_gridinv \
+  --hx "$HX" --hz "$HZ" \
+  --noninv_channels "$NONINV" --n_noninv "$N_NONINV" --inv_hidden $INV $KERNEL_FLAG \
+  --dt "$DT" --lr_min "$LR_MIN" --diag_shift "$DIAG_SHIFT" --qgt "$QGT" \
+  --n_iter "$N_ITER" --n_samples "$N_SAMPLES" --n_chains "$N_CHAINS" $CHUNK_FLAG \
+  --checkpoint_every "$CKPT_EVERY" --resume \
+  --out_dir "$OUT_DIR" --name "$NAME" \
+  --wandb_group "${SLURM_JOB_NAME}" $WB_FLAG &
+wait

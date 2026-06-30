@@ -9,18 +9,42 @@ import flax.linen as nn
 import netket as nk
 from typing import Dict, Any, Optional, List
 
-def save_model(vstate: nk.vqs.VariationalState, filename: str) -> None:
+def save_model(vstate: nk.vqs.VariationalState, filename: str,
+               verbose: bool = True) -> None:
     """
     Save a variational state to a file.
-    
+
     Args:
         vstate: NetKet variational state
         filename: Name of the file to save to (without extension)
+        verbose: print a confirmation line (set False for periodic checkpoints
+                 that would otherwise spam the log)
     """
     with open(f"{filename}.mpack", 'wb') as file:
         file.write(flax.serialization.to_bytes(vstate))
-    
-    print(f"Model saved to {filename}.mpack")
+
+    if verbose:
+        print(f"Model saved to {filename}.mpack")
+
+
+def load_weights(vstate: nk.vqs.VariationalState, filename: str) -> nk.vqs.MCState:
+    """
+    Restore parameters (and sampler state) into an already-built variational
+    state from a `.mpack` written by `save_model` — the resume path. Unlike
+    `load_model`, this does not rebuild the state, so the caller keeps its exact
+    sampler / Hamiltonian wiring; the saved sampler RNG state is restored too, so
+    a resumed run continues the Markov chains where the checkpoint left off.
+
+    Args:
+        vstate: a freshly built MCState with matching sampler / model
+        filename: checkpoint path without the `.mpack` extension
+
+    Returns:
+        The variational state with checkpointed parameters loaded.
+    """
+    with open(f"{filename}.mpack", 'rb') as file:
+        data = file.read()
+    return flax.serialization.from_bytes(vstate, data)
 
 def load_model(filename: str, sampler: nk.sampler.MetropolisSampler, model: nn.Module, 
                n_samples: int, n_discard_per_chain: int, chunk_size: int) -> nk.vqs.MCState:

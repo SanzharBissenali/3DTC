@@ -192,11 +192,12 @@ def build_state(config: Dict[str, Any]) -> Tuple[Any, Any, Any, Any, Any]:
 
 def run_loop(vs, Ham, n_iter: int, dt: float, diag_shift: float,
              on_step: Optional[Callable] = None, lr_min: Optional[float] = None,
-             qgt: str = "auto"):
+             qgt: str = "auto", start_step: int = 0,
+             total_iter: Optional[int] = None):
     """VMC + Sgd + SR(diag_shift) for n_iter steps.
 
     Learning rate: constant `dt` by default, or — if `lr_min` is given — a cosine
-    decay from `dt` down to `lr_min` across the `n_iter` steps
+    decay from `dt` down to `lr_min` across the `total_iter` steps
     (`optax.cosine_decay_schedule`, alpha = lr_min/dt).
 
     `qgt` selects the SR geometric-tensor representation: "dense"
@@ -205,14 +206,22 @@ def run_loop(vs, Ham, n_iter: int, dt: float, diag_shift: float,
     free; for n_params ≫ n_samples or when the dense n_params^2 matrix would not
     fit), or "auto" (dense when n_params ≤ 8192, else onthefly).
 
+    `start_step`/`total_iter` support **resuming** a timed-out run: this call
+    runs `n_iter` more steps, but the cosine-LR schedule and the step index given
+    to `on_step` are offset by `start_step`, and the decay horizon is the original
+    `total_iter` (defaults to `n_iter`). A fresh run leaves both at their defaults
+    and behaves identically to before.
+
     If `on_step` is given it is called as on_step(step, E, vs) each iteration
     (with a fresh `E = vs.expect(Ham)`); pass None to skip per-step expectation
     when only the final state is needed (cheaper).
     """
+    total_iter = total_iter or n_iter
     if lr_min is not None and lr_min != dt:
         import optax
-        lr = optax.cosine_decay_schedule(init_value=dt, decay_steps=n_iter,
-                                         alpha=lr_min / dt)
+        base = optax.cosine_decay_schedule(init_value=dt, decay_steps=total_iter,
+                                           alpha=lr_min / dt)
+        lr = (lambda s: base(s + start_step)) if start_step else base
     else:
         lr = dt
     opt = nk.optimizer.Sgd(learning_rate=lr)
@@ -226,5 +235,5 @@ def run_loop(vs, Ham, n_iter: int, dt: float, diag_shift: float,
     for step in range(n_iter):
         driver.advance(1)
         if on_step is not None:
-            on_step(step, vs.expect(Ham), vs)
+            on_step(start_step + step, vs.expect(Ham), vs)
     return vs
