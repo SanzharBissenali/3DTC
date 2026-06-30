@@ -55,7 +55,11 @@ CKPT_EVERY="${CKPT_EVERY:-10}"
 CHUNK="${CHUNK:-}"                   # set e.g. 4096 if a large-L forward pass OOMs the GPU
 
 OUT_DIR="${OUT_DIR:-$PSCRATCH/tc_nqs/gridinv}"
-NAME="${NAME:-gridinv_L${L}_${BC}_hx${HX}_hz${HZ}_n${N_NONINV}x${NONINV}_k${KERNEL}}"
+# INV is part of the identity: two runs differing only in --inv_hidden (e.g.
+# "4 4 4" vs "4 4 4 2") must NOT share a name, or they clobber each other's
+# checkpoint and --resume loads a mismatched parameter tree. "4 4 4" -> "4-4-4".
+INV_TAG=$(echo "$INV" | tr ' ' '-')
+NAME="${NAME:-gridinv_L${L}_${BC}_hx${HX}_hz${HZ}_n${N_NONINV}x${NONINV}_inv${INV_TAG}_k${KERNEL}}"
 
 # Perlmutter compute nodes usually cannot reach wandb.ai -> log offline and
 # `wandb sync $OUT_DIR/wandb/offline-*` from a login node afterward. Set
