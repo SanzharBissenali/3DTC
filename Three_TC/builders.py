@@ -13,8 +13,9 @@ The optimization loop (`run_loop`) also lives here, shared by both front-ends.
 Config keys consumed (all optional except where noted; see DEFAULTS):
     System      : L (req), bc, model ∈ {"bosonic","fermionic"}
     Hamiltonian : hx, hy, hz, J
-    Architecture: arch ∈ {"ToricCNN","ToricCNN_full","GeoCNN"}, hidden,
-                  cnn_hidden (GeoCNN edge-conv widths)
+    Architecture: arch ∈ {"ToricCNN","ToricCNN_full","ToricCNN_gridinv","GeoCNN"},
+                  hidden, cnn_hidden (GeoCNN edge-conv widths),
+                  kernel_size (ToricCNN_gridinv invariant grid-conv kernel; auto=L)
     Sampling    : n_samples, n_chains, n_discard, chunk_size, n_sweeps, seed
 """
 from __future__ import annotations
@@ -31,8 +32,8 @@ from Three_TC.model.hamiltonian import (
     create_hamiltonian, create_hamiltonian_fermionic)
 from Three_TC.model.fermionic_decoration import fermionic_plaquettes
 from Three_TC.model.networks import (
-    ToricCNN, ToricCNN_full, GeoCNN, VanillaCNN, VanillaWilsonCNN,
-    KernelManager3D, compute_edges_3D)
+    ToricCNN, ToricCNN_full, ToricCNN_gridinv, GeoCNN, VanillaCNN,
+    VanillaWilsonCNN, KernelManager3D, compute_edges_3D, plaq_grid_layout)
 
 
 DEFAULTS: Dict[str, Any] = {
@@ -129,8 +130,21 @@ def build_model(config: Dict[str, Any], geo):
         # geometry-exact CNN, NO Wilson 4-product: same kernel, not A_v-invariant
         return GeoCNN(km=km,
                       hidden=tuple(config.get("cnn_hidden", (4, 4, 4)) or ()))
+    if arch == "ToricCNN_gridinv":
+        # Wilson sandwich with a standard grid nn.Conv3D invariant block,
+        # kernel → L (override with kernel_size). PBC: CIRCULAR; OBC: zero pad.
+        grid_dims, grid_lin, grid_mask = plaq_grid_layout(geo)
+        return ToricCNN_gridinv(
+            km=km, plaq_all=plaq_tuple,
+            grid_dims=grid_dims, grid_lin=grid_lin, grid_mask=grid_mask,
+            noninv_channels=config.get("noninv_channels", 4),
+            n_noninv=config.get("n_noninv", 2),
+            inv_hidden=tuple(config.get("inv_hidden", (4, 4)) or ()),
+            kernel_size=config.get("kernel_size"),
+            padding="CIRCULAR" if geo.bc == "PBC" else "SAME")
     raise ValueError(
-        f"unknown arch {arch!r} (expected ToricCNN, ToricCNN_full or GeoCNN)")
+        f"unknown arch {arch!r} (expected ToricCNN, ToricCNN_full, "
+        "ToricCNN_gridinv or GeoCNN)")
 
 
 def build_sampler(config: Dict[str, Any], hi, geo):

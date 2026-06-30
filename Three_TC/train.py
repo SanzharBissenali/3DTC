@@ -208,14 +208,15 @@ def _parse_args() -> Dict[str, Any]:
                         "--hz_preset)")
     # Architecture
     p.add_argument("--arch",
-                   choices=["ToricCNN", "ToricCNN_full", "GeoCNN",
-                            "VanillaCNN", "VanillaWilsonCNN"],
+                   choices=["ToricCNN", "ToricCNN_full", "ToricCNN_gridinv",
+                            "GeoCNN", "VanillaCNN", "VanillaWilsonCNN"],
                    default=D)
     p.add_argument("--hidden", type=int, default=D)
     p.add_argument("--vanilla_depth", type=int, default=D,
                    help="VanillaCNN: number of hidden conv layers (default 2)")
     p.add_argument("--kernel_size", type=int, default=D,
-                   help="VanillaCNN/VanillaWilsonCNN: cubic conv kernel extent (default 3)")
+                   help="VanillaCNN/VanillaWilsonCNN: cubic conv kernel extent (default 3); "
+                        "ToricCNN_gridinv: invariant grid-conv kernel (default auto = L)")
     p.add_argument("--noninv_random", action="store_true",
                    help="VanillaWilsonCNN: random-init the noninv block instead of "
                         "identity warm start (default is identity pass-through)")

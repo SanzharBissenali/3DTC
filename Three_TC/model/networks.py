@@ -58,7 +58,7 @@ geometry this module fixes.
 from __future__ import annotations
 
 import itertools
-from typing import Any, Callable, List
+from typing import Any, Callable, List, Optional
 
 import numpy as np
 import jax.numpy as jnp
@@ -588,3 +588,99 @@ class GeoCNN(nn.Module):
         h = GeoConv3D(self.km, "edge", 1, activation=nn.elu,
                       identity_init=False, dtype=self.dtype)(h)
         return jnp.mean(h, axis=(-2, -1))                              # (...,) log ψ
+
+
+def plaq_grid_layout(geo):
+    """Map the (possibly OBC-truncated) plaquette set onto a dense cubic grid so a
+    standard `nn.Conv` can run on the post-Wilson flux field.
+
+    Each plaquette (centre `corner + ½ê_a + ½ê_b`, normal axis `o`) is anchored to
+    the cube cell `(ix,iy,iz) = floor(centre)` and placed in orientation-channel
+    `o` — the 2D→3D analogue of "plaquettes live on the dual-lattice vertices",
+    except a 3D cell carries up to 3 of them (one per normal) folded into channels.
+    The within-cell ½-offsets between the three normals are collapsed onto the same
+    vertex (the half-offset approximation that GeoConv3D avoids).
+
+    Returns (grid_dims, grid_lin, grid_mask):
+        grid_dims  (Lx,Ly,Lz) cube-cell grid.
+        grid_lin   (N_plaq,) flat slot of each plaquette into ravel(O,Lx,Ly,Lz).
+        grid_mask  (O·Lx·Ly·Lz,) 1.0 where a real plaquette sits (0 on empty OBC
+                   boundary cells), for the masked readout mean.
+    """
+    Lx, Ly, Lz = geo.Lx, geo.Ly, geo.Lz
+    O, P = 3, Lx * Ly * Lz
+    grid_lin, mask = [], np.zeros(O * P)
+    for center, o in zip(geo.plaq_centers, geo.plaq_orient):
+        ix, iy, iz = np.floor(center + 1e-9).astype(int)
+        slot = int(o) * P + ix * Ly * Lz + iy * Lz + iz
+        grid_lin.append(slot)
+        mask[slot] = 1.0
+    return (Lx, Ly, Lz), tuple(grid_lin), tuple(mask)
+
+
+class ToricCNN_gridinv(nn.Module):
+    """Wilson sandwich with a STANDARD grid `nn.Conv3D` invariant block.
+
+    The 2D-paper architecture, generalised the obvious way to 3D:
+        edge spins → noninv GeoConv3D ×n (identity warm-start, OBC-exact)
+        → per-channel Wilson 4-product (flux, exactly A_v-invariant)
+        → **fold plaquettes onto the cube-cell grid** (`plaq_grid_layout`)
+        → standard `nn.Conv3D` ×depth with kernel scaled toward L
+        → masked mean → log ψ.
+
+    Only the *invariant* (post-Wilson) block is a vanilla grid conv: the flux field
+    lives on a clean Lx·Ly·Lz grid (3 orientation channels), so a fast `nn.Conv3D`
+    with `kernel_size → L` spans the system to reach the topological long-range
+    order — far cheaper than growing the geometry-exact 15-tap stencil. The
+    noninv block stays geometry-exact (small kernel, OBC-safe). PBC uses CIRCULAR
+    padding; OBC uses zero ('SAME') padding with a masked readout.
+    """
+    km: Any
+    plaq_all: tuple                    # (N_plaq, 4) flat qubit indices, for Wilson
+    grid_dims: tuple                   # (Lx, Ly, Lz)
+    grid_lin: tuple                    # (N_plaq,) plaquette → ravel(O,Lx,Ly,Lz) slot
+    grid_mask: tuple                   # (O·Lx·Ly·Lz,) occupied-cell mask
+    noninv_channels: int = 4
+    n_noninv: int = 2
+    inv_hidden: tuple = (4, 4)
+    kernel_size: Optional[int] = None  # None → auto = Lx (full span)
+    padding: str = "SAME"              # "CIRCULAR" for PBC, "SAME" (zero) for OBC
+    dtype: Any = jnp.float64
+
+    @nn.compact
+    def __call__(self, x):                      # x: (..., N) spins ±1
+        O, (Lx, Ly, Lz) = 3, self.grid_dims
+        P, M = Lx * Ly * Lz, 3 * Lx * Ly * Lz
+        ks = (self.kernel_size or Lx,) * 3
+        plaq_idx = jnp.asarray(self.plaq_all)
+        grid_lin = jnp.asarray(self.grid_lin)
+        lead = x.shape[:-1]
+
+        # noninv edge blocks (geometry-exact, OBC-safe, identity warm-start)
+        h = x[..., None, :].astype(self.dtype)                          # (..., 1, N)
+        for _ in range(self.n_noninv):
+            h = CNN_noninvariant_3D(self.km, self.noninv_channels, self.dtype)(h)
+        C = h.shape[-2]
+
+        # per-channel Wilson 4-product: (..., C, N) → (..., C, N_plaq)
+        g = jnp.prod(h[..., plaq_idx], axis=-1)
+        g = g.reshape((-1, C, g.shape[-1]))                            # (B, C, N_plaq)
+        B = g.shape[0]
+
+        # scatter onto the cube-cell grid → channels-last (B, Lx, Ly, Lz, C·O)
+        gd = jnp.zeros((B, C, M), self.dtype).at[:, :, grid_lin].set(g)
+        gd = gd.reshape((B, C, O, Lx, Ly, Lz))
+        gd = jnp.transpose(gd, (0, 3, 4, 5, 1, 2)).reshape((B, Lx, Ly, Lz, C * O))
+
+        # standard grid invariant block, kernel → L
+        for w in (self.inv_hidden or (4,)):
+            gd = nn.elu(nn.Conv(features=w * O, kernel_size=ks, padding=self.padding,
+                                param_dtype=self.dtype)(gd))
+        gd = nn.Conv(features=O, kernel_size=ks, padding=self.padding,
+                     param_dtype=self.dtype)(gd)                       # (B,Lx,Ly,Lz,O)
+
+        # masked mean over real plaquettes → log ψ
+        mask = jnp.asarray(self.grid_mask).reshape((O, Lx, Ly, Lz))
+        mask = jnp.transpose(mask, (1, 2, 3, 0))                       # (Lx,Ly,Lz,O)
+        out = jnp.sum(gd * mask, axis=(1, 2, 3, 4)) / jnp.sum(mask)
+        return out.reshape(lead)                                       # (...,) log ψ
