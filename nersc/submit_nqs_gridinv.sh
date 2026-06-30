@@ -19,7 +19,7 @@
 #
 #SBATCH --job-name=tc-gridinv
 #SBATCH --account=m5340_g
-#SBATCH --qos=regular
+#SBATCH --qos=shared
 #SBATCH --constraint=gpu
 #SBATCH --gpus=1
 #SBATCH --ntasks=1
