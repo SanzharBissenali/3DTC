@@ -98,9 +98,12 @@ def build_sampler(config: Dict[str, Any], hi, geo):
         [nk.sampler.rules.LocalRule(), MultiRule(vertex_clusters)],
     )
     n_sweeps = config.get("n_sweeps") or geo.N * 2
-    return nk.sampler.MetropolisSampler(
-        hi, rule=weighted, n_chains=config.get("n_chains", 16),
-        n_sweeps=n_sweeps, dtype=jnp.int8)
+    common = dict(rule=weighted, n_chains=config.get("n_chains", 16), dtype=jnp.int8)
+    # NetKet renamed the constructor kwarg n_sweeps -> sweep_size; support both.
+    try:
+        return nk.sampler.MetropolisSampler(hi, sweep_size=n_sweeps, **common)
+    except TypeError:
+        return nk.sampler.MetropolisSampler(hi, n_sweeps=n_sweeps, **common)
 
 
 def build_state(config: Dict[str, Any]) -> Tuple[Any, Any, Any, Any]:
