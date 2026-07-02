@@ -39,7 +39,7 @@ from Three_TC.utils.wandb_logger import init_run, log_step, finish_run
 
 
 TRAIN_DEFAULTS: Dict[str, Any] = {
-    "n_iter": 500, "dt": 2e-2, "diag_shift": 2e-4, "lr_min": 2e-3, "qgt": "minsr",
+    "n_iter": 500, "dt": 2e-2, "diag_shift": 2e-4, "lr_min": 2e-3, "qgt": "auto",
     "out_dir": "outputs", "wandb": True,
     "wandb_project": "approx-sym-2D-TC-transformer",
     "wandb_entity": "models-california-institute-of-technology-caltech",
@@ -51,7 +51,7 @@ TRAIN_DEFAULTS: Dict[str, Any] = {
 
 def _run_name(cfg: Dict[str, Any]) -> str:
     return cfg.get("name") or (
-        f"factored_L{cfg['L']}_hx{cfg['hx']}_hz{cfg['hz']}_{cfg['bc']}")
+        f"{cfg['arch']}_L{cfg['L']}_hx{cfg['hx']}_hz{cfg['hz']}_{cfg['bc']}")
 
 
 def exact_ground_energy(geo, hx: float, hz: float, J: float = 1.0) -> Optional[float]:
@@ -242,10 +242,20 @@ def _parse_args() -> Dict[str, Any]:
     p.add_argument("--exact_E0", type=float, default=D,
                    help="E_exact for the delta FOM (required at L>=4; auto-ED at L<=3)")
     # Architecture
+    p.add_argument("--arch", choices=["factored_transformer", "Combo", "RPP"], default=D,
+                   help="ansatz (default factored_transformer)")
+    # transformer
     p.add_argument("--d", type=int, default=D, help="embed dim (default 16)")
     p.add_argument("--n_heads", type=int, default=D, help="attention heads (default 4)")
     p.add_argument("--n_layers", type=int, default=D, help="transformer blocks (default 4)")
     p.add_argument("--mlp_ratio", type=int, default=D, help="MLP hidden = mlp_ratio*d (default 2)")
+    # Combo / RPP baseline
+    p.add_argument("--channels_noninv", type=int, nargs="+", default=D,
+                   help="Combo: non-invariant CNN channel widths, e.g. --channels_noninv 1 16")
+    p.add_argument("--channels_inv", type=int, nargs="+", default=D,
+                   help="Combo: invariant CNN channel widths, e.g. --channels_inv 16 8 1")
+    p.add_argument("--kernel_size", type=int, default=D, help="Combo: non-invariant conv kernel")
+    p.add_argument("--rescale", type=float, default=D, help="Combo: Wilson rescale (default 1.0)")
     # Training
     p.add_argument("--n_iter", type=int, default=D)
     p.add_argument("--dt", type=float, default=D, help="(initial) learning rate")

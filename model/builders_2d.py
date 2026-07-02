@@ -36,6 +36,9 @@ DEFAULTS: Dict[str, Any] = {
     "hx": 0.0, "hy": 0.0, "hz": 0.0, "J": 1.0,
     "arch": "factored_transformer",
     "d": 16, "n_heads": 4, "n_layers": 4, "mlp_ratio": 2,
+    # Combo / RPP (the Approximately-Symmetric CNN baseline)
+    "channels_noninv": [1, 16], "channels_inv": [16, 8, 1],
+    "kernel_size": 2, "rescale": 1.0,
     "n_samples": 4096, "n_chains": 16, "n_discard": 8,
     "chunk_size": None, "n_sweeps": None, "seed": 0,
 }
@@ -77,7 +80,22 @@ def build_model(config: Dict[str, Any], geo):
         return FactoredAttentionWavefunction(
             N=geo.N, d=config.get("d", 16), n_heads=config.get("n_heads", 4),
             n_layers=config.get("n_layers", 4), mlp_ratio=config.get("mlp_ratio", 2))
-    raise ValueError(f"unknown arch {arch!r} (expected 'factored_transformer')")
+    if arch in ("Combo", "RPP"):
+        # the Approximately-Symmetric CNN baseline (model/networks.py legacy stack)
+        from model.networks import create_model, KernelManager
+        km = KernelManager(geo.Lx, geo.Ly, geo.bc, config.get("kernel_size", 2),
+                           geo.Lx - 1, geo.arr_coord, geo.dg_p, geo.N)
+        combo_cfg = {
+            "architecture": arch,
+            "channels_noninv": list(config.get("channels_noninv", [1, 16])),
+            "channels_inv": list(config.get("channels_inv", [16, 8, 1])),
+            "kernel_size": config.get("kernel_size", 2),
+            "bc": geo.bc, "dtype": config.get("dtype", "float64"),
+            "rescale": config.get("rescale", 1.0),
+        }
+        return create_model(combo_cfg, geo.plaq_all, km)
+    raise ValueError(f"unknown arch {arch!r} "
+                     "(expected factored_transformer, Combo or RPP)")
 
 
 def build_sampler(config: Dict[str, Any], hi, geo):
