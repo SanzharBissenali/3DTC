@@ -32,8 +32,9 @@ set -euo pipefail
 module load conda
 conda activate tc-nqs                # built by setup_conda_gpu.sh
 
-REPO=$HOME/Approximate-Symmetries-TC   # <-- EDIT to where you cloned the repo
-cd "$REPO"
+# where you cloned the repo; override at submit time with REPO=... if it moves
+REPO="${REPO:-$HOME/threed_TC/ThreeD_TC}"
+cd "$REPO" || { echo "[submit] REPO not found: $REPO — set REPO=<clone path>"; exit 1; }
 
 # ---- hyperparameters (override any at submit time via env vars) --------------
 L="${L:-4}"                          # linear size; N = 3L³ (PBC) / 3L³-3L² (OBC)

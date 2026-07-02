@@ -191,6 +191,46 @@ architecture generalised directly to 3D** — keep the Wilson sandwich, but make
 
 ---
 
+### 2026-06-30 — Cluster (NERSC) pipeline + first L=6 gridinv kernel sweep
+
+Made `Three_TC/train.py` **timeout-safe** for NERSC and launched the first L=6
+runs. Goal of these runs: not full convergence, but a coarse probe of whether
+`ToricCNN_gridinv` can even **land near the ground state at L=6** — on Colab it was
+getting "nowhere closer."
+
+- **Checkpoint/resume + offline wandb** (`train.py`, `builders.run_loop`,
+  `utils/io.load_weights`): `--checkpoint_every N` atomically writes
+  `{name}.ckpt.mpack` (weights + sampler RNG) + `{name}.curve.json` (step count +
+  full curve) every N steps; `--resume` reloads them and continues the cosine-LR
+  schedule (new `start_step`/`total_iter` args); `--wandb_offline` +
+  deterministic run-id so requeued chunks merge into one run on `wandb sync`.
+  Verified resume locally at L=2 OBC (warm start continued the energy, curve kept
+  all steps). See `notes/training_cli.md` + `nersc/README.md` Phase 5.
+- **Submit wrapper** `nersc/submit_nqs_gridinv.sh`: single long gridinv run, every
+  knob an env var (`L/BC/HX/HZ/DT/DIAG_SHIFT/NONINV/N_NONINV/INV/KERNEL/N_ITER/...`),
+  `--resume` always on, `AUTO_RESUBMIT=1` self-requeues ~3 min before the wall limit
+  (Slurm `--signal` trap) for multi-slot runs. `qos=shared`, 1 A100. **Name now
+  encodes `INV`** (`inv4-4-4`) after two k=5 runs differing only in `--inv_hidden`
+  collided on the same checkpoint.
+- **`n_params` (cheap local build, the dense-QGT gate):** L=6 OBC (N=540),
+  noninv 2×4, inv `[4,4,4]` — kernel 5 → 59k, kernel 4 → 31k, kernel 3 → 14k
+  params. All dense-QGT-safe on one A100 (Jacobian ≤ 7.8 GB). **Use `dense`, not
+  onthefly** — direct solve beats CG here and CG is the path that flakes on GPU.
+  (Full-span kernel 6 with inv `[4,4,4,4]` blows up to 133k → would OOM dense;
+  cap the kernel or stack depth instead.)
+- **First batch (running, L=6 OBC, hx=hz=0.2, dt=0.02, diag_shift=1e-3, 100 iters,
+  AUTO_RESUBMIT):** kernels {5,4,3} at inv `[4,4,4]`, plus inv `[4,4,4,2]` at
+  kernel 5. Submitted at the **perturbed** point (h=0 is a trivial stabilizer
+  target); judged **relative** to each other + the ~−666 h=0 anchor as a ballpark
+  (true `E0(0.2)` sits a bit below −666, no exact value at L=6) + `⟨A_v⟩→1` / low
+  spread / `R_hat≈1` for "stayed in the topological state."
+- **Next:** rank kernels by landed energy; if one lands close, extend its `n_iter`
+  (just re-`sbatch`, `--resume` continues) and then move the winner to a `(hx,hz)`
+  line for the transition. If none land close, the gridinv half-offset
+  approximation may be too lossy at L=6 → compare against `ToricCNN_full`.
+
+---
+
 
 
 
