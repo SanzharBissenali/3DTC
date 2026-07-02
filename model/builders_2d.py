@@ -170,8 +170,17 @@ def run_loop(vs, Ham, n_iter: int, dt: float, diag_shift: float,
             sr = nk.optimizer.SR(diag_shift=diag_shift)
         driver = nk.driver.VMC(Ham, opt, variational_state=vs, preconditioner=sr)
 
-    for step in range(n_iter):
-        driver.advance(1)
-        if on_step is not None:
-            on_step(start_step + step, vs.expect(Ham), vs)
+    # Drive via the stable `driver.run(..., callback=...)` API (older NetKet's
+    # `driver.advance` was removed). The driver already estimates the energy each
+    # step, so `on_step` reads that Stats object rather than re-sampling.
+    if on_step is not None:
+        def _cb(step, log_data, dr):
+            E = getattr(dr, "_loss_stats", None)
+            if E is None:
+                E = log_data.get(getattr(dr, "_loss_name", "Energy"))
+            on_step(start_step + step, E, dr.state)
+            return True
+        driver.run(n_iter, callback=_cb, show_progress=False)
+    else:
+        driver.run(n_iter, show_progress=False)
     return vs
