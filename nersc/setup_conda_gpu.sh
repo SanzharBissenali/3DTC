@@ -25,10 +25,13 @@ else
   conda activate "$ENV_NAME"
 fi
 
-# NQS stack: CUDA12 JAX + NetKet/Flax/optax + wandb. The cuda plugin/pjrt wheels
-# bundle the CUDA libraries, so no `module load cudatoolkit` is required.
+# NQS stack: CUDA12 JAX + NetKet/Flax/optax + wandb. The `[with-cuda]` extra on
+# the plugin is REQUIRED: it pulls the nvidia-*-cu12 wheels (cuDNN, cuBLAS, CUDA
+# runtime) so JAX uses its OWN bundled cuDNN. Without it, jaxlib falls back to the
+# system cudatoolkit's cuDNN (a different version) -> CUDNN_STATUS_INTERNAL_ERROR
+# on the first conv. With it, no `module load cudatoolkit` is needed.
 pip install --no-cache-dir \
-  jax==0.5.2 jaxlib==0.5.1 jax-cuda12-plugin==0.5.1 jax-cuda12-pjrt==0.5.1 \
+  jax==0.5.2 jaxlib==0.5.1 "jax-cuda12-plugin[with-cuda]==0.5.1" jax-cuda12-pjrt==0.5.1 \
   netket==3.16.1.post1 flax==0.10.4 optax \
   "numpy==2.1.3" "scipy==1.15.2" numba tqdm wandb
 

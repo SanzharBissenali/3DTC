@@ -127,7 +127,8 @@ def train(config: Dict[str, Any]) -> Dict[str, Any]:
           f"  n_chains={cfg['n_chains']}  n_sweeps={cfg['n_sweeps']}  qgt={cfg['qgt']}"
           + (f"  E_exact={exact_E0:.6f}" if exact_E0 is not None else ""))
 
-    curve = {"step": [], "energy": [], "energy_err": [], "energy_spread": [], "delta": []}
+    curve = {"step": [], "energy": [], "energy_err": [], "energy_spread": [],
+             "delta": [], "vscore": []}
 
     # --- resume a timed-out run from the last on-disk checkpoint ---
     start_step = 0
@@ -164,19 +165,22 @@ def train(config: Dict[str, Any]) -> Dict[str, Any]:
         e   = float(np.real(E.mean))
         de  = float(np.real(E.error_of_mean))
         var = float(np.real(E.variance))
+        vscore = geo.N * var / e ** 2 if e != 0 else float("nan")
         delta = abs(e - exact_E0) / abs(exact_E0) if exact_E0 is not None else None
         curve["step"].append(step)
         curve["energy"].append(e)
         curve["energy_err"].append(de)
         curve["energy_spread"].append(np.sqrt(var))
         curve["delta"].append(delta)
+        curve["vscore"].append(vscore)
         msg = (f"  step {step:4d}/{cfg['n_iter']}:  E = {e:+.6f} ± {de:.6f}"
-               f"   (spread = {np.sqrt(var):.4f})")
+               f"   (spread = {np.sqrt(var):.4f}, Vscore = {vscore:.2e})")
         if delta is not None:
             msg += f"   delta = {delta:.3e}"
         print(msg, flush=True)
         if run is not None:
             log_step(run, step, E, vs, exact_E0=exact_E0)
+            run.log({"Vscore": vscore}, step=step)
         if ckpt_every and ((step + 1) % ckpt_every == 0):
             _write_checkpoint(step + 1)
 
