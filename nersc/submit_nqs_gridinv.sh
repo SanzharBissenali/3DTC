@@ -24,7 +24,7 @@
 #SBATCH --gpus=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=32
-#SBATCH --time=12:00:00
+#SBATCH --time=05:00:00
 #SBATCH --signal=B:USR1@180          # USR1 to the batch script 180s before the limit
 #SBATCH --output=%x-%j.out
 set -euo pipefail
